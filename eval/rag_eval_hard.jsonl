@@ -1,0 +1,5 @@
+{"pregunta": "¿Hay algún diagrama que muestre cómo se disponen en profundidad los distintos ambientes y cuerpos de un yacimiento de cobre?", "doc": "Porphyry Copper Systems (Sillitoe 2010)", "debe_recuperar": ["_page_7_Figure_1"], "tipo": "figura"}
+{"pregunta": "¿Tienes un esquema que compare cómo se reparten los metales en varios depósitos famosos?", "doc": "Porphyry Copper Systems (Sillitoe 2010)", "debe_recuperar": ["_page_13_Figure_2"], "tipo": "figura"}
+{"pregunta": "Necesito una lámina para estimar a ojo la calidad de la roca a partir de su estructura y el estado de las juntas.", "doc": "The Hoek-Brown Failure Criterion and GSI - 2018 Edition (Hoek-Brown 2018)", "debe_recuperar": ["_page_5_Figure_3"], "tipo": "figura"}
+{"pregunta": "¿Qué gráfico relaciona el ángulo de un talud con un índice de calidad para saber si se sostiene?", "doc": "The Q-Slope Method for Rock Slope Engineering (Bar-Barton 2017)", "debe_recuperar": ["_page_4_Figure_5"], "tipo": "figura"}
+{"pregunta": "¿Hay un dibujo con las maneras típicas en que se desploma un talud?", "doc": "Fundamentals of Slope Design (Hoek 2009)", "debe_recuperar": ["_page_2_Picture_6"], "tipo": "figura"}

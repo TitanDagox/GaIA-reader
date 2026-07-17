@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Revisión de figuras — TESTIGO</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+<style>
+  :root { --tinta:#1e2124; --papel:#e9eae4; --acento:#c2571a; --ok:#2e7d32; --borde:#b9bab2; }
+  * { box-sizing: border-box; }
+  body { font-family: "IBM Plex Sans", system-ui, sans-serif; background: var(--papel);
+         color: var(--tinta); margin: 0; padding-bottom: 4rem; }
+  header { background: var(--tinta); color: #eee; padding: .7rem 1.2rem; display: flex;
+           gap: 1rem; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 50; }
+  header h1 { font-size: 1rem; margin: 0; letter-spacing: .08em; }
+  header select { font-family: inherit; padding: .35rem; max-width: 46ch; }
+  .btn { font-family: inherit; font-weight: 600; border: 1px solid var(--tinta); background: #fff;
+         padding: .45rem .9rem; cursor: pointer; }
+  .btn:hover { background: #f2f2ea; }
+  .btn.primario { background: var(--acento); border-color: var(--acento); color: #fff; }
+  .btn.aprobar  { background: var(--ok); border-color: var(--ok); color: #fff; }
+  #estado { font-family: "IBM Plex Mono", monospace; font-size: .8rem; }
+  main { max-width: 1200px; margin: 1.2rem auto; padding: 0 1rem; }
+  .ayuda { background: #fff8e1; border: 1px solid #d4b106; padding: .8rem 1rem; font-size: .9rem;
+           margin-bottom: 1.2rem; }
+  .grupo { background: #fff; border: 1px solid var(--borde); margin-bottom: 1.1rem; }
+  .grupo.omitido { opacity: .45; }
+  .grupo.drag-encima { outline: 3px dashed var(--acento); }
+  .grupo header2 { display: flex; gap: .8rem; align-items: center; padding: .5rem .8rem;
+                   background: #f4f4ef; border-bottom: 1px solid var(--borde); flex-wrap: wrap; }
+  .gnum { font-family: "IBM Plex Mono", monospace; font-weight: 700; }
+  .accion { font-size: .78rem; color: #555; font-family: "IBM Plex Mono", monospace; }
+  .accion.fusion { color: var(--acento); font-weight: 700; }
+  .caption { width: 100%; border: 1px solid var(--borde); font-family: inherit; font-size: .88rem;
+             padding: .45rem .6rem; resize: vertical; min-height: 2.4rem; }
+  .cuerpo { padding: .8rem; }
+  .fila { display: flex; flex-wrap: wrap; gap: 12px; min-height: 70px; align-items: flex-start; }
+  figure.thumb { margin: 0; text-align: center; border: 1px solid var(--borde); padding: 6px;
+                 background: #fafaf7; cursor: grab; }
+  figure.thumb:active { cursor: grabbing; }
+  figure.thumb img { max-height: 210px; max-width: 300px; display: block; margin: 0 auto; }
+  figure.thumb figcaption { font-family: "IBM Plex Mono", monospace; font-size: .62rem;
+                            margin-top: 4px; color: #666; }
+  .mini { font-size: .68rem; padding: .15rem .45rem; margin: 2px 1px 0; }
+  .zona-desc { border: 2px dashed #a33; background: #f8eeee; padding: .8rem; margin-top: 1.5rem; }
+  .zona-desc h3 { margin: .1rem 0 .6rem; font-size: .9rem; color: #a33; }
+  .pista { font-size: .78rem; color: #777; }
+  /* modal recorte */
+  #velo { display: none; position: fixed; inset: 0; background: rgba(20,20,20,.75); z-index: 100; }
+  #modal { position: fixed; inset: 4% 8%; background: #fff; z-index: 101; display: none;
+           flex-direction: column; padding: 1rem; gap: .7rem; }
+  #cropzona { flex: 1; min-height: 0; }
+  #cropzona img { max-width: 100%; display: block; }
+  #modal .filabtn { display: flex; gap: .6rem; justify-content: flex-end; }
+  #exito { display: none; background: #e6f4e6; border: 2px solid var(--ok); padding: 1rem;
+           margin-bottom: 1.2rem; font-size: .95rem; }
+  code { background: #eee; padding: .1rem .3rem; font-size: .85em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>REVISIÓN DE FIGURAS</h1>
+  <select id="seldoc" onchange="cargar(this.value)"><option>cargando…</option></select>
+  <button class="btn" onclick="nuevoGrupo()">＋ Grupo nuevo</button>
+  <button class="btn primario" onclick="guardar(false)">💾 Guardar</button>
+  <button class="btn aprobar" onclick="aprobar()">✔ APROBAR PLAN</button>
+  <span id="estado"></span>
+</header>
+<main>
+  <div class="ayuda">
+    <b>Cómo se usa:</b> cada tarjeta es un <b>grupo</b>: si tiene más de una imagen, se fusionarán
+    en UN mosaico y Sonnet lo describirá con UNA sola llamada. <b>Arrastra</b> una imagen a otro
+    grupo para moverla (o suéltala sobre otra imagen para ordenar), usa <b>＋ Grupo nuevo</b> para
+    separar una figura, edita el <b>pie</b> directamente en el cuadro de texto, <b>✂ Recortar</b>
+    abre el editor de recorte, <b>🗑</b> manda la imagen a descartadas (logos, decoración),
+    <b>⇪ reemplazar</b> sustituye una imagen mal extraída por una captura tuya (p.ej. de la
+    herramienta Recortes de Windows sobre el PDF) y <b>⇪ Subir imagen</b> agrega una captura
+    nueva al grupo. Cuando todo esté bien: <b>✔ APROBAR PLAN</b>. Nada se envía a las APIs
+    hasta aprobar.
+  </div>
+  <div id="exito"></div>
+  <div id="grupos"></div>
+  <div class="zona-desc" id="zonadesc">
+    <h3>🗑 DESCARTADAS (no se describen ni se indexan) — arrastra aquí para descartar, o de vuelta a un grupo para recuperar</h3>
+    <div class="fila" id="filadesc"></div>
+  </div>
+</main>
+
+<div id="velo"></div>
+<div id="modal">
+  <b id="croptitulo"></b>
+  <div id="cropzona"><img id="cropimg"></div>
+  <div class="filabtn">
+    <button class="btn" onclick="restaurarImg()">↩ Restaurar original</button>
+    <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn primario" onclick="guardarRecorte()">✂ Aplicar recorte</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+<script>
+let plan = null, doc = null, version = Date.now();
+let cropper = null, cropDoc = null, cropImgName = null;
+
+const $ = id => document.getElementById(id);
+const urlImg = img => `/img?doc=${encodeURIComponent(doc)}&img=${encodeURIComponent(img)}&v=${version}`;
+
+async function cargarPlanes() {
+  const r = await fetch('/planes'); const d = await r.json();
+  const sel = $('seldoc'); sel.innerHTML = '';
+  if (!d.planes.length) { sel.innerHTML = '<option>(no hay planes pendientes)</option>'; return; }
+  for (const p of d.planes) {
+    const o = document.createElement('option');
+    o.value = p.doc; o.textContent = (p.aprobado ? '✔ ' : '⏸ ') + p.doc;
+    sel.appendChild(o);
+  }
+  const pedido = new URLSearchParams(location.search).get('doc');
+  const inicial = pedido && d.planes.some(p => p.doc === pedido) ? pedido
+                : (d.planes.find(p => !p.aprobado) || d.planes[0]).doc;
+  sel.value = inicial;
+  cargar(inicial);
+}
+
+async function cargar(d) {
+  doc = d;
+  const r = await fetch('/plan?doc=' + encodeURIComponent(d));
+  if (!r.ok) { $('estado').textContent = 'error cargando plan'; return; }
+  plan = await r.json();
+  plan.descartadas = plan.descartadas || [];
+  $('exito').style.display = 'none';
+  render();
+  $('estado').textContent = plan.aprobado ? 'plan APROBADO (puedes seguir editando)' : 'plan pendiente de revisión';
+}
+
+function render() {
+  const cont = $('grupos'); cont.innerHTML = '';
+  plan.grupos.forEach((g, gi) => {
+    const card = document.createElement('div');
+    card.className = 'grupo' + (g.omitir ? ' omitido' : '');
+    card.ondragover = e => { e.preventDefault(); card.classList.add('drag-encima'); };
+    card.ondragleave = () => card.classList.remove('drag-encima');
+    card.ondrop = e => { e.preventDefault(); card.classList.remove('drag-encima'); soltar(e, gi, null); };
+
+    const head = document.createElement('header2');
+    const accion = g.imgs.length > 1
+      ? `<span class="accion fusion">FUSIONAR ${g.imgs.length} EN 1 MOSAICO</span>`
+      : (g.imgs.length === 1 ? '<span class="accion">figura individual</span>'
+                             : '<span class="accion">vacío — arrastra imágenes aquí o se eliminará al guardar</span>');
+    head.innerHTML = `<span class="gnum">GRUPO ${gi + 1}</span> ${accion}`;
+    const btnOm = document.createElement('button');
+    btnOm.className = 'btn mini';
+    btnOm.textContent = g.omitir ? 'incluir de nuevo' : 'omitir grupo';
+    btnOm.onclick = () => { g.omitir = !g.omitir; render(); };
+    head.appendChild(btnOm);
+    const btnUp = document.createElement('button');
+    btnUp.className = 'btn mini';
+    btnUp.textContent = '⇪ Subir imagen';
+    btnUp.title = 'agregar una captura tuya a este grupo';
+    btnUp.onclick = () => subirNueva(gi);
+    head.appendChild(btnUp);
+    card.appendChild(head);
+
+    const cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo';
+    const cap = document.createElement('textarea');
+    cap.className = 'caption';
+    cap.value = g.caption || '';
+    cap.placeholder = '(sin pie detectado — escribe aquí el pie correcto, p.ej. "Figure 5. ...")';
+    cap.oninput = () => { g.caption = cap.value; };
+    cuerpo.appendChild(cap);
+
+    const fila = document.createElement('div'); fila.className = 'fila';
+    g.imgs.forEach((img, ii) => fila.appendChild(thumb(img, gi, ii)));
+    cuerpo.appendChild(fila);
+    card.appendChild(cuerpo);
+    cont.appendChild(card);
+  });
+
+  const fd = $('filadesc'); fd.innerHTML = '';
+  plan.descartadas.forEach((d0, di) => fd.appendChild(thumb(d0.img, -1, di)));
+  const zd = $('zonadesc');
+  zd.ondragover = e => e.preventDefault();
+  zd.ondrop = e => { e.preventDefault(); soltarEnDescartadas(e); };
+}
+
+function thumb(img, gi, ii) {
+  const f = document.createElement('figure');
+  f.className = 'thumb'; f.draggable = true;
+  f.ondragstart = e => e.dataTransfer.setData('text/plain', JSON.stringify({ gi, ii, img }));
+  f.ondrop = e => { e.preventDefault(); e.stopPropagation(); if (gi >= 0) soltar(e, gi, ii); };
+  f.ondragover = e => e.preventDefault();
+  const im = document.createElement('img');
+  im.src = urlImg(img); im.loading = 'lazy';
+  f.appendChild(im);
+  const fc = document.createElement('figcaption'); fc.textContent = img; f.appendChild(fc);
+  const acc = document.createElement('div');
+  const bC = document.createElement('button'); bC.className = 'btn mini'; bC.textContent = '✂ recortar';
+  bC.onclick = () => abrirModal(img);
+  acc.appendChild(bC);
+  const bR = document.createElement('button'); bR.className = 'btn mini'; bR.textContent = '⇪ reemplazar';
+  bR.title = 'sustituir por una captura tuya (queda respaldo .bak)';
+  bR.onclick = () => reemplazar(img);
+  acc.appendChild(bR);
+  if (gi >= 0) {
+    const bD = document.createElement('button'); bD.className = 'btn mini'; bD.textContent = '🗑';
+    bD.title = 'descartar (logo/decoración)';
+    bD.onclick = () => { quitar({ gi, ii, img }); plan.descartadas.push({ img, dim: '' }); render(); };
+    acc.appendChild(bD);
+  }
+  f.appendChild(acc);
+  return f;
+}
+
+function quitar(d) {
+  if (d.gi >= 0) plan.grupos[d.gi].imgs.splice(d.ii, 1);
+  else plan.descartadas.splice(d.ii, 1);
+}
+
+function soltar(e, giDestino, iiDestino) {
+  const d = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+  if (d.img === undefined) return;
+  if (d.gi === giDestino && iiDestino === null) return;
+  quitar(d);
+  const imgs = plan.grupos[giDestino].imgs;
+  let pos = iiDestino === null ? imgs.length : iiDestino;
+  if (d.gi === giDestino && d.ii < pos) pos--;   // se corrió al quitar
+  imgs.splice(pos, 0, d.img);
+  render();
+}
+
+function soltarEnDescartadas(e) {
+  const d = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+  if (d.img === undefined || d.gi < 0) return;
+  quitar(d);
+  plan.descartadas.push({ img: d.img, dim: '' });
+  render();
+}
+
+function nuevoGrupo() {
+  plan.grupos.push({ imgs: [], caption: '', contexto: '', omitir: false });
+  render();
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+async function guardar(aprobando) {
+  plan.grupos = plan.grupos.filter(g => g.imgs.length > 0);
+  plan.grupos.forEach((g, i) => { g.n = i + 1; });
+  if (aprobando) plan.aprobado = true;
+  const r = await fetch('/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                   body: JSON.stringify({ doc, plan }) });
+  const ok = r.ok;
+  $('estado').textContent = ok ? (aprobando ? '✔ APROBADO y guardado' : '💾 guardado') : 'ERROR al guardar';
+  if (ok && aprobando) {
+    const ex = $('exito');
+    ex.innerHTML = `<b>✔ Plan aprobado.</b> Para continuar (describir con Sonnet + indexar), ` +
+      `re-ejecuta la ingesta de este documento, o dile a Claude: <i>"continúa la ingesta de ${doc}"</i>.`;
+    ex.style.display = 'block';
+    window.scrollTo(0, 0);
+  }
+  render();
+  cargarPlanes0();
+}
+
+async function cargarPlanes0() {  // refresca solo las etiquetas ✔/⏸ del selector
+  const r = await fetch('/planes'); const d = await r.json();
+  const sel = $('seldoc');
+  for (const o of sel.options) {
+    const p = d.planes.find(x => x.doc === o.value);
+    if (p) o.textContent = (p.aprobado ? '✔ ' : '⏸ ') + p.doc;
+  }
+}
+
+function aprobar() {
+  if (confirm('¿Aprobar el plan? Con esto la próxima ingesta describirá con Sonnet e indexará con embeddings.'))
+    guardar(true);
+}
+
+/* ── recorte ── */
+function abrirModal(img) {
+  cropDoc = doc; cropImgName = img;
+  $('croptitulo').textContent = '✂ Recortar: ' + img;
+  $('velo').style.display = 'block'; $('modal').style.display = 'flex';
+  const el = $('cropimg');
+  el.src = urlImg(img);
+  if (cropper) { cropper.destroy(); cropper = null; }
+  el.onload = () => { cropper = new Cropper(el, { viewMode: 1, autoCropArea: 0.98 }); };
+}
+
+function cerrarModal() {
+  if (cropper) { cropper.destroy(); cropper = null; }
+  $('velo').style.display = 'none'; $('modal').style.display = 'none';
+}
+
+async function guardarRecorte() {
+  if (!cropper) return;
+  const d = cropper.getData(true);
+  const r = await fetch('/recortar', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc: cropDoc, img: cropImgName, x: d.x, y: d.y, w: d.width, h: d.height }) });
+  if (r.ok) { version = Date.now(); cerrarModal(); render(); $('estado').textContent = '✂ recorte aplicado'; }
+  else { alert('Error al recortar: ' + (await r.text())); }
+}
+
+async function restaurarImg() {
+  const r = await fetch('/restaurar', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc: cropDoc, img: cropImgName }) });
+  if (r.ok) { version = Date.now(); cerrarModal(); render(); $('estado').textContent = '↩ imagen restaurada'; }
+  else { alert('No hay respaldo para esta imagen (aún no se ha recortado).'); }
+}
+
+/* ── subir capturas propias ── */
+let fileCb = null;
+const fpick = document.createElement('input');
+fpick.type = 'file'; fpick.accept = 'image/*'; fpick.style.display = 'none';
+document.body.appendChild(fpick);
+fpick.onchange = e => {
+  const f = e.target.files[0];
+  if (!f || !fileCb) return;
+  const lector = new FileReader();
+  lector.onload = () => { fileCb(lector.result); fileCb = null; };
+  lector.readAsDataURL(f);
+  e.target.value = '';
+};
+function pedirArchivo(cb) { fileCb = cb; fpick.click(); }
+
+function subirNueva(gi) {
+  pedirArchivo(async data => {
+    const r = await fetch('/subir', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ doc, data }) });
+    if (r.ok) {
+      const j = await r.json();
+      plan.grupos[gi].imgs.push(j.img);
+      version = Date.now(); render();
+      $('estado').textContent = '⇪ imagen agregada al grupo ' + (gi + 1) + ' (recuerda Guardar)';
+    } else alert('Error al subir: ' + (await r.text()));
+  });
+}
+
+function reemplazar(img) {
+  pedirArchivo(async data => {
+    const r = await fetch('/subir', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ doc, data, nombre: img }) });
+    if (r.ok) { version = Date.now(); render(); $('estado').textContent = '⇪ imagen reemplazada (respaldo .bak guardado)'; }
+    else alert('Error al reemplazar: ' + (await r.text()));
+  });
+}
+
+cargarPlanes();
+</script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+# OJO: en .gitignore los comentarios `#` deben ir en LINEA PROPIA.
+# Un comentario al final de un patron hace que Git busque literalmente
+# "carpeta/   # texto" y el patron deja de funcionar (bug real que tuvimos).
+#
+# Este archivo SE PUBLICA: cada patron revela el nombre de lo que oculta.
+# Aqui va solo lo que cualquier instalacion de GaIA necesita ignorar.
+# Lo personal de tu PC (carpetas privadas, notas propias) va en
+# .git/info/exclude, que funciona igual y nunca se commitea.
+
+# === Secretos (NUNCA subir) ===
+.env
+*.key
+*.pem
+.claude/settings.local.json
+.claude/launch.json
+
+# === PDFs de entrada (derechos de autor / posible data interna) ===
+raw/
+_descargas/
+
+# === Derivados de los PDFs (regenerables; pueden contener contenido con derechos) ===
+md/
+outlines/
+descripciones/
+qdrant_data/
+
+# === Datos personales de uso (conversaciones, cuadernos, perfil) ===
+conversaciones/
+cuadernos.json
+perfil.json
+embed_manifest.json
+
+# === Skill vendorizado + helper suelto (no van al repo) ===
+.agents/
+skills-lock.json
+resumir_ingesta.sh
+
+# === Memoria de mantenedor (dev): reglas del agente + tracker de tareas ===
+# Quedan LOCALES para desarrollar; el repo es para USAR la app (ver README/CONTEXTO/NOTAS_TECNICAS).
+CLAUDE.md
+AGENTS.md
+ROADMAP.md
+
+# === Historico / respaldos / debug ===
+_archivo/
+*.bak
+*.bak_move
+debug_*.txt
+find_results.txt
+
+# === Python ===
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# === Logs / temporales ===
+*.log
+*.out

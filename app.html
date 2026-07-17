@@ -1,0 +1,2953 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GaIA · Carta de documento</title>
+
+<!-- Cartografía: Saira Condensed (rótulos) · IBM Plex Sans (cuerpo) · IBM Plex Mono (códigos) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Recorte de figuras -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
+
+<!-- Markdown + LaTeX (degradan a texto plano si no cargan) -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16/dist/contrib/auto-render.min.js"></script>
+
+<style>
+/* ══ Tokens — carta geológica ═══════════════════════════════════════════
+   Paleta de UNIDADES: el color codifica jerarquía (dato, no adorno).
+   Rojo-ladrillo intrusivo = acento de interacción, BLOQUEADO en toda la app. */
+:root{
+  --sheet:#E9EAE4;        /* papel de carta, neutro frío */
+  --sheet-2:#F2F2EC;      /* recuadros / campos */
+  --ink:#17181C;          /* tinta de mapa */
+  --ink-2:#5C5E57;        /* tinta secundaria */
+  --neat:#B4B6AB;         /* neatline / hairline */
+  --neat-2:#CFD1C6;
+
+  /* unidades litológicas */
+  --intrusivo:#BE4630;    --intrusivo-f:#E4B3A6;   /* nivel 1 · acento interacción */
+  --meta:#2F7C70;         --meta-f:#A9CEC6;         /* nivel 2 */
+  --sed:#B9862A;          --sed-f:#E7CF97;          /* nivel 3 · tablas */
+  --volc:#6A5896;         --volc-f:#C3B8DC;         /* figuras */
+  --agua:#356C93;         /* enlaces / rasgos hídricos */
+
+  --hover:#DFE1DA;        /* fondo hover en la leyenda */
+  --activa:#DDE6E2;       /* sección activa */
+  --field-focus:#ffffff;  /* campo enfocado */
+  --code-bg:#e0e2da;      /* fondo de código inline */
+  --cita-hover:#d8e2ea;   /* fondo hover de cita */
+
+  --f-rotulo:'Saira Condensed',sans-serif;
+  --f-cuerpo:'IBM Plex Sans',system-ui,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+/* ── Tema oscuro (carta nocturna): recolorea vía tokens ── */
+[data-theme="dark"]{
+  --sheet:#1b1c20;        --sheet-2:#25272c;
+  --ink:#e8e9e3;          --ink-2:#a6a89e;
+  --neat:#3a3c42;         --neat-2:#4a4c52;
+  --intrusivo:#e0674f;    --intrusivo-f:#5a2c22;
+  --meta:#4fb3a2;         --meta-f:#24443f;
+  --sed:#d6a744;          --sed-f:#4a3c1c;
+  --volc:#a894d6;         --volc-f:#3a3350;
+  --agua:#6bb0de;
+  --hover:#2c2e34;        --activa:#2a3a38;
+  --field-focus:#2d2f35;  --code-bg:#33353b;  --cita-hover:#26343d;
+}
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{height:100%}
+
+/* Scrollbars finas y auto-ocultas: sólo aparecen al pasar el puntero por el área. */
+.unidades,.hilo,.quiz-contenido,.consulta textarea{
+  scrollbar-width:thin; scrollbar-color:transparent transparent;
+}
+.unidades:hover,.hilo:hover,.quiz-contenido:hover,.consulta textarea:hover,
+.unidades:focus-within,.hilo:focus-within{scrollbar-color:var(--neat) transparent}
+.unidades::-webkit-scrollbar,.hilo::-webkit-scrollbar,
+.quiz-contenido::-webkit-scrollbar,.consulta textarea::-webkit-scrollbar{width:9px;height:9px}
+.unidades::-webkit-scrollbar-thumb,.hilo::-webkit-scrollbar-thumb,
+.quiz-contenido::-webkit-scrollbar-thumb,.consulta textarea::-webkit-scrollbar-thumb{
+  background:transparent; border:2px solid transparent; background-clip:content-box;
+}
+.unidades:hover::-webkit-scrollbar-thumb,.hilo:hover::-webkit-scrollbar-thumb,
+.quiz-contenido:hover::-webkit-scrollbar-thumb,.consulta textarea:hover::-webkit-scrollbar-thumb{
+  background:var(--neat); background-clip:content-box;
+}
+.unidades::-webkit-scrollbar-track,.hilo::-webkit-scrollbar-track,
+.quiz-contenido::-webkit-scrollbar-track{background:transparent}
+body{
+  background:var(--sheet); color:var(--ink);
+  font-family:var(--f-cuerpo); font-size:15px; line-height:1.5;
+  display:flex; flex-direction:column;
+}
+:focus-visible{outline:2px solid var(--intrusivo); outline-offset:1px}
+button{font:inherit; color:inherit}
+
+/* ══ Cartela (bloque de título del mapa) ════════════════════════════════ */
+.cartela{
+  display:flex; align-items:stretch; gap:0;
+  border-bottom:1px solid var(--ink);
+  background:var(--sheet);
+}
+.cartela .titulo{
+  padding:.5rem 1.1rem .55rem; border-right:1px solid var(--ink);
+  display:flex; flex-direction:column; justify-content:center; min-width:210px;
+}
+.eyebrow{font-family:var(--f-mono); font-size:.58rem; letter-spacing:.18em;
+  color:var(--ink-2); text-transform:uppercase}
+.wordmark{font-family:var(--f-rotulo); font-weight:700; font-size:1.7rem;
+  letter-spacing:.14em; line-height:.92; margin:.05rem 0}
+.wordmark .ia{color:var(--intrusivo)}
+.datum{font-family:var(--f-mono); font-size:.55rem; letter-spacing:.06em; color:var(--ink-2)}
+.cartela .campo{
+  flex:1; display:flex; align-items:center; gap:.9rem; padding:0 1.1rem; min-width:0;
+}
+.cartela .campo select{
+  flex:1; max-width:560px;
+  font-family:var(--f-mono); font-size:.76rem; color:var(--ink);
+  background:var(--sheet-2); border:1px solid var(--neat);
+  padding:.4rem 1.6rem .4rem .55rem;   /* buffer a la derecha: la flecha no pisa el texto */
+  text-overflow:ellipsis;
+}
+.brujula{font-family:var(--f-rotulo); font-weight:700; font-size:.62rem;
+  letter-spacing:.1em; color:var(--ink-2); text-align:center; line-height:1}
+.brujula .aguja{display:block; font-size:1rem; color:var(--intrusivo)}
+.cartela .medicion{
+  border-left:1px solid var(--ink); padding:0 1rem;
+  display:flex; align-items:center; gap:.5rem;
+  font-family:var(--f-mono); font-size:.62rem; color:var(--ink-2); white-space:nowrap;
+}
+.tick{width:8px;height:8px;background:var(--neat)}
+.tick.ok{background:var(--meta)} .tick.err{background:var(--intrusivo)}
+.tema-btn{all:unset; cursor:pointer; font-family:var(--f-mono); font-size:.9rem;
+  border:1px solid var(--neat); padding:.2rem .45rem; margin-left:.6rem; line-height:1;
+  color:var(--ink); background:var(--sheet-2)}
+.tema-btn:hover{border-color:var(--ink)}
+.tema-btn:focus-visible{outline:2px solid var(--intrusivo)}
+
+/* ══ Hoja (cuerpo del mapa) — 3 columnas redimensionables ═══════════════ */
+.hoja{flex:1; display:flex; min-height:0; min-width:0}
+
+/* divisor arrastrable entre columnas */
+.resizer{flex:none; width:6px; cursor:col-resize; background:var(--sheet);
+  border-left:1px solid var(--ink); position:relative}
+.resizer::after{content:''; position:absolute; inset:0 -3px; }  /* zona de agarre ampliada */
+.resizer:hover, .resizer.arrastrando{background:var(--intrusivo)}
+
+/* ── VISOR PDF (columna central) ── */
+.visor{flex:1; min-width:0; display:flex; flex-direction:column; background:var(--sheet-2)}
+.visor-cab{flex:none; display:flex; align-items:center; gap:.7rem;
+  padding:.4rem .8rem; border-bottom:1px solid var(--ink); background:var(--sheet)}
+.visor-cab .rot{font-family:var(--f-rotulo); font-weight:600; font-size:.7rem;
+  letter-spacing:.14em; color:var(--ink-2)}
+.visor-cab .doc{font-family:var(--f-mono); font-size:.66rem; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0}
+.visor-cab .mini{margin-left:auto}
+.visor iframe{flex:1; width:100%; border:0; background:var(--sheet-2)}
+.visor-vacio{flex:1; display:flex; align-items:center; justify-content:center;
+  font-family:var(--f-mono); font-size:.72rem; color:var(--ink-2); text-align:center; padding:2rem}
+/* el display:flex de arriba pisaría el atributo hidden → forzar ocultamiento */
+.visor iframe[hidden], .visor-vacio[hidden]{display:none}
+
+/* ── Modal de revisión / recorte de figuras ── */
+.modal{position:fixed; inset:0; z-index:80; background:rgba(10,11,13,.72);
+  display:flex; align-items:center; justify-content:center; padding:2.2vh 2vw}
+.modal[hidden]{display:none}
+.modal-caja{background:var(--sheet); border:1px solid var(--ink);
+  width:min(1100px,96vw); height:min(92vh,900px); display:flex; flex-direction:column}
+.modal-cab{flex:none; display:flex; align-items:center; gap:.8rem;
+  padding:.55rem .9rem; border-bottom:1px solid var(--ink); background:var(--sheet-2)}
+.modal-cab .rot{font-family:var(--f-rotulo); font-weight:700; font-size:.86rem; letter-spacing:.12em}
+.modal-cab .doc{font-family:var(--f-mono); font-size:.66rem; color:var(--ink-2);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0}
+.modal-cab .mini{margin-left:auto}
+.fig-grid{flex:1; overflow-y:auto; padding:.9rem;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:.9rem; align-content:start}
+.fig-card{border:1px solid var(--neat); background:var(--sheet-2); display:flex; flex-direction:column}
+.fig-card .thumb{background:var(--sheet); border-bottom:1px solid var(--neat); padding:.5rem;
+  display:flex; align-items:center; justify-content:center; height:170px}
+.fig-card .thumb img{max-width:100%; max-height:100%; object-fit:contain; border:1px solid var(--neat-2)}
+.fig-card .meta{padding:.5rem .6rem; display:flex; flex-direction:column; gap:.4rem}
+.fig-card .cap{font-family:var(--f-mono); font-size:.62rem; color:var(--ink); line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+.fig-card .fila{display:flex; align-items:center; gap:.4rem}
+.fig-card .marca{font-family:var(--f-mono); font-size:.55rem; color:var(--meta);
+  border:1px solid var(--meta); padding:.06rem .3rem; letter-spacing:.04em}
+.fig-crop{flex:1; display:flex; flex-direction:column; min-height:0}
+.fig-crop[hidden]{display:none}
+.fig-crop-area{flex:1; min-height:0; background:#111; display:flex; align-items:center; justify-content:center; padding:.6rem}
+.fig-crop-area img{max-width:100%; max-height:100%; display:block}
+.fig-crop-barra{flex:none; display:flex; align-items:center; gap:.6rem;
+  padding:.55rem .9rem; border-top:1px solid var(--ink); background:var(--sheet-2)}
+.fig-crop-barra .cap{font-family:var(--f-mono); font-size:.62rem; color:var(--ink-2);
+  flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.fig-crop-barra .btn{margin-left:.2rem}
+
+/* ── Acciones bajo una ficha (Anki, etc.) ── */
+.acciones{margin-top:.6rem; display:flex; gap:.4rem; flex-wrap:wrap}
+
+/* ── Modal de tarjetas Anki ── */
+.anki-lista{flex:1; overflow-y:auto; padding:.9rem; display:flex; flex-direction:column; gap:.7rem}
+.anki-card{border:1px solid var(--neat); background:var(--sheet-2); padding:.55rem .65rem;
+  display:grid; grid-template-columns:1.4em 1fr; gap:.35rem .55rem; align-items:start}
+.anki-card .lbl{font-family:var(--f-mono); font-size:.62rem; color:var(--intrusivo); padding-top:.4rem}
+.anki-card textarea{resize:vertical; min-height:2.1rem; overflow:hidden;
+  font-family:var(--f-cuerpo); font-size:.86rem; color:var(--ink);
+  background:var(--sheet); border:1px solid var(--neat); padding:.35rem .5rem; width:100%}
+.anki-card .del{grid-column:2; justify-self:end; margin-top:-.2rem}
+.anki-vacio{font-family:var(--f-mono); font-size:.72rem; color:var(--ink-2); padding:1.2rem; text-align:center}
+
+/* selector de cuaderno en la cartela (más angosto que el de documento) */
+#selCuaderno{flex:0 0 auto; max-width:220px}
+.cartela .campo .mini{flex:none}
+
+/* ── Modal de gestión de cuadernos ── */
+.cuad-body{flex:1; overflow-y:auto; padding:.9rem; display:flex; flex-direction:column; gap:.6rem}
+.cuad-lista{display:flex; flex-direction:column; gap:.5rem}
+.cuad-fila{display:flex; align-items:center; gap:.6rem; border:1px solid var(--neat);
+  background:var(--sheet-2); padding:.5rem .7rem}
+.cuad-fila .nom{font-family:var(--f-rotulo); font-weight:600; font-size:.95rem; flex:1; min-width:0}
+.cuad-fila .cnt{font-family:var(--f-mono); font-size:.62rem; color:var(--ink-2)}
+.cuad-editor{display:flex; flex-direction:column; gap:.7rem}
+.cuad-editor input.nombre{font-family:var(--f-rotulo); font-size:1rem; color:var(--ink);
+  background:var(--sheet-2); border:1px solid var(--neat); padding:.45rem .6rem}
+.cuad-docs{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:.35rem;
+  max-height:46vh; overflow-y:auto; border:1px solid var(--neat); padding:.6rem}
+.cuad-docs label{display:flex; gap:.5rem; align-items:flex-start; font-size:.8rem;
+  padding:.25rem; cursor:pointer}
+.cuad-docs input{margin-top:.2rem}
+.cuad-barra{display:flex; align-items:center; gap:.6rem}
+.cuad-barra .btn{margin-left:auto}
+.cuad-hint{font-family:var(--f-mono); font-size:.66rem; color:var(--ink-2)}
+
+/* ── Modal gestor de libretas (borrar conversaciones) ── */
+.lib-caja{width:min(580px,96vw); height:min(72vh,660px)}
+.modal-cab .mini.act{background:var(--ink); color:var(--sheet); border-color:var(--ink)}
+.modal-cab .mini.peligro{color:var(--intrusivo); border-color:var(--intrusivo)}
+.lib-lista{flex:1; overflow-y:auto; padding:.9rem; display:flex; flex-direction:column; gap:.4rem}
+.lib-fila{display:flex; align-items:center; gap:.6rem; border:1px solid var(--neat);
+  background:var(--sheet-2); padding:.5rem .7rem; cursor:pointer}
+.lib-fila:hover{border-color:var(--ink)}
+.lib-fila .circ{flex:none; width:16px; height:16px; border:2px solid var(--neat);
+  border-radius:50%; display:none; transition:background .12s, border-color .12s}
+.lib-caja.editando .lib-fila .circ{display:block}
+.lib-fila.sel .circ{background:var(--meta); border-color:var(--meta)}
+.lib-fila .tit{font-family:var(--f-rotulo); font-weight:600; font-size:.9rem; flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.lib-fila .meta{font-family:var(--f-mono); font-size:.6rem; color:var(--ink-2); flex:none; white-space:nowrap}
+.lib-vacio{font-family:var(--f-mono); font-size:.72rem; color:var(--ink-2); padding:1.4rem; text-align:center}
+
+/* ── LEYENDA (índice como leyenda de mapa) ── */
+.leyenda{
+  width:300px; flex:none; border-right:1px solid var(--ink);
+  display:flex; flex-direction:column; min-height:0; background:var(--sheet);
+}
+.leyenda-cab{
+  font-family:var(--f-rotulo); font-weight:600; font-size:.82rem; letter-spacing:.14em;
+  padding:.7rem .9rem .5rem; border-bottom:1px solid var(--neat);
+  display:flex; justify-content:space-between; align-items:baseline;
+}
+.leyenda-cab .cuenta{font-family:var(--f-mono); font-weight:400; font-size:.6rem;
+  letter-spacing:.04em; color:var(--sed)}
+.unidades{list-style:none; overflow-y:auto; overflow-x:hidden; flex:1; padding:.35rem 0 2rem}
+.unidades li{position:relative}
+.unidades button{
+  all:unset; cursor:pointer; display:grid; grid-template-columns:26px 2.1em 1fr;
+  gap:.55rem; align-items:center; width:100%; padding:.34rem .9rem;
+}
+.unidades button:hover{background:var(--hover)}
+.unidades button:focus-visible{outline:2px solid var(--intrusivo); outline-offset:-2px}
+.unidades li.activa button{background:var(--activa); box-shadow:inset 3px 0 0 var(--meta)}
+
+/* swatch con trama de litología por nivel */
+.sw{width:26px; height:17px; border:1px solid var(--ink); background-color:var(--neat-2)}
+.n1 .sw{background-color:var(--intrusivo-f);
+  background-image:repeating-linear-gradient(0deg,rgba(30,20,18,.55) 0 1px,transparent 1px 6px),
+                   repeating-linear-gradient(90deg,rgba(30,20,18,.55) 0 1px,transparent 1px 6px)}
+.n2 .sw{background-color:var(--meta-f);
+  background-image:repeating-linear-gradient(45deg,rgba(15,40,36,.5) 0 1px,transparent 1px 5px)}
+.n3 .sw{background-color:var(--sed-f);
+  background-image:repeating-linear-gradient(0deg,rgba(60,40,10,.5) 0 1px,transparent 1px 5px)}
+.sin-resumen .sw{background-color:var(--sheet-2);
+  background-image:repeating-linear-gradient(45deg,var(--neat) 0 1px,transparent 1px 6px)}
+
+.leyenda-hint{list-style:none; padding:.85rem .95rem; font-family:var(--f-mono);
+  font-size:.66rem; line-height:1.55; color:var(--ink-2)}
+.leyenda-hint strong{color:var(--meta)}
+.unidades .cod{font-family:var(--f-mono); font-size:.62rem; color:var(--ink-2)}
+.unidades .rot{font-family:var(--f-rotulo); font-weight:600; font-size:.85rem;
+  letter-spacing:.02em; line-height:1.05}
+.n2 .rot{font-size:.8rem; color:var(--ink)}
+.n3 .rot{font-size:.76rem; font-weight:500; color:var(--ink-2)}
+.sin-resumen .rot{color:var(--ink-2); font-style:italic; font-weight:500}
+@media (prefers-reduced-motion:no-preference){
+  .unidades li{opacity:0; animation:aparece .22s ease-out forwards;
+    animation-delay:calc(var(--i)*18ms)}
+  @keyframes aparece{to{opacity:1}}
+}
+
+/* ── PERFIL (columna de trabajo / chat) ── */
+.perfil{width:420px; flex:none; display:flex; flex-direction:column;
+  min-height:0; min-width:0; position:relative; background:var(--sheet)}
+/* riel de coordenadas UTM arriba */
+.regla{
+  height:20px; border-bottom:1px solid var(--neat); position:relative;
+  background:
+    repeating-linear-gradient(90deg, var(--neat) 0 1px, transparent 1px 12px) left bottom/100% 5px no-repeat,
+    var(--sheet);
+  font-family:var(--f-mono); font-size:.52rem; color:var(--ink-2); flex:none;
+}
+.regla span{position:absolute; top:3px; letter-spacing:.02em}
+.regla .e1{left:1rem} .regla .e2{left:38%} .regla .e3{right:1rem}
+
+.libretas{display:flex; align-items:center; gap:.5rem; flex:none; flex-wrap:nowrap; min-width:0;
+  padding:.36rem 1rem; border-bottom:1px solid var(--neat); background:var(--sheet)}
+.lib-rot{font-family:var(--f-rotulo); font-weight:600; font-size:.66rem; letter-spacing:.14em;
+  color:var(--ink-2); flex:none; white-space:nowrap}
+.mini{all:unset; cursor:pointer; font-family:var(--f-mono); font-size:.62rem; white-space:nowrap;
+  flex:none; border:1px solid var(--neat); padding:.24rem .5rem; color:var(--ink)}
+.mini:hover{border-color:var(--ink); background:var(--sheet-2)}
+.mini:focus-visible{outline:2px solid var(--intrusivo)}
+.mini-sel{font-family:var(--f-mono); font-size:.62rem; color:var(--ink-2); flex:1; min-width:0; max-width:300px;
+  background:var(--sheet-2); border:1px solid var(--neat); padding:.22rem 1.3rem .22rem .45rem;
+  text-overflow:ellipsis}
+
+.hilo{flex:1; overflow-y:auto; padding:1.2rem 1.5rem; display:flex;
+  flex-direction:column; gap:.9rem; scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){.hilo{scroll-behavior:auto}}
+
+.pregunta{align-self:flex-end; max-width:74%;
+  font-family:var(--f-mono); font-size:.78rem; line-height:1.5;
+  background:var(--ink); color:var(--sheet); padding:.55rem .8rem}
+.pregunta .rotulo{display:block; font-size:.55rem; letter-spacing:.16em;
+  color:#9a9b91; margin-bottom:.2rem}
+
+.ficha{background:var(--sheet-2); border:1px solid var(--neat);
+  max-width:90%; padding:.9rem 1.15rem .85rem; position:relative}
+.ficha::before{content:attr(data-id); position:absolute; top:0; right:0;
+  font-family:var(--f-mono); font-size:.55rem; letter-spacing:.1em;
+  background:var(--ink); color:var(--sheet); padding:.12rem .45rem .16rem}
+.ficha--seccion{border-left:4px solid var(--meta)}
+.ficha--web{border-left:4px solid var(--intrusivo)}
+.ficha h4{font-family:var(--f-rotulo); font-weight:700; font-size:1.02rem;
+  letter-spacing:.02em; margin:0 0 .4rem; padding-right:3rem}
+.cuerpo{font-size:.92rem}
+.cuerpo p{margin:.45rem 0}
+.cuerpo h1,.cuerpo h2,.cuerpo h3,.cuerpo h4{
+  font-family:var(--f-rotulo); font-weight:600; font-size:.95rem;
+  letter-spacing:.02em; margin:.75rem 0 .3rem}
+.cuerpo ul,.cuerpo ol{margin:.4rem 0 .4rem 1.2rem}
+.cuerpo li{margin:.2rem 0}
+.cuerpo strong{color:var(--intrusivo)}
+.cuerpo a{color:var(--agua)}
+.cuerpo .tabla-scroll{overflow-x:auto; margin:.55rem 0; border:1px solid var(--neat)}
+.cuerpo table{border-collapse:collapse; font-size:.82rem; width:100%}
+.cuerpo td,.cuerpo th{border:1px solid var(--neat); padding:.3rem .55rem;
+  min-width:5rem; vertical-align:top}
+.cuerpo th{background:var(--sheet); font-family:var(--f-rotulo); font-weight:600;
+  text-align:left; letter-spacing:.01em}
+.cuerpo code{font-family:var(--f-mono); font-size:.82em; background:var(--code-bg); padding:.05em .3em}
+.aviso-web{font-family:var(--f-mono); font-size:.66rem; color:var(--intrusivo);
+  margin-bottom:.45rem; letter-spacing:.03em}
+
+.fuentes{display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.75rem;
+  padding-top:.55rem; border-top:1px dashed var(--neat)}
+.chip{all:unset; cursor:pointer; font-family:var(--f-mono); font-size:.62rem;
+  border:1px solid var(--neat); padding:.18rem .45rem; color:var(--ink-2);
+  display:inline-flex; gap:.35rem; align-items:center}
+.chip:hover{border-color:var(--ink); color:var(--ink); background:var(--sheet)}
+.chip:focus-visible{outline:2px solid var(--intrusivo)}
+.chip .u{width:9px; height:9px; border:1px solid var(--ink); flex:none}
+.chip.text .u{background:var(--neat-2)}
+.chip.figure .u{background:var(--volc-f);
+  background-image:repeating-linear-gradient(45deg,var(--volc) 0 1px,transparent 1px 3px)}
+.chip.table .u{background:var(--sed-f);
+  background-image:repeating-linear-gradient(0deg,var(--sed) 0 1px,transparent 1px 3px)}
+.fig-inline{margin-top:.65rem}
+.fig-inline img{max-width:100%; border:1px solid var(--ink); display:block}
+.fig-inline figcaption{font-family:var(--f-mono); font-size:.6rem; color:var(--ink-2);
+  margin-top:.28rem; border-left:2px solid var(--volc); padding-left:.4rem}
+.fig-inline .fig-lbl{font-weight:500; color:var(--ink); letter-spacing:.02em}
+.fig-inline .fig-cap{margin-top:.2rem}
+.fig-inline .fig-cap summary{cursor:pointer; color:var(--agua); list-style:revert}
+.fig-inline .fig-cap[open] summary{margin-bottom:.25rem}
+.fig-inline .fig-cap>*:not(summary){line-height:1.4}
+
+/* citas inline enlazadas (hover → preview) */
+.cita{color:var(--agua); border-bottom:1px dotted var(--agua); cursor:help; white-space:nowrap}
+.cita:hover{background:var(--cita-hover)}
+/* tooltip de preview (nota de campo — siempre oscuro, no se invierte con el tema) */
+.tip{position:fixed; z-index:60; max-width:360px; background:#1f2024; color:#e9eae4;
+  padding:.5rem .62rem; box-shadow:0 5px 16px rgba(0,0,0,.4); pointer-events:none;
+  border-top:3px solid var(--sed)}
+.tip[hidden]{display:none}
+.tip-cab{font-family:var(--f-mono); font-size:.56rem; letter-spacing:.05em; color:#c9cabf;
+  margin-bottom:.35rem; display:flex; gap:.45rem; align-items:baseline}
+.tip-tipo{color:var(--sed); text-transform:uppercase; font-weight:500}
+.tip-score{margin-left:auto; color:#9a9b90}
+.tip-cuerpo{font-family:var(--f-cuerpo); font-size:.74rem; line-height:1.45}
+
+.escribiendo{font-family:var(--f-mono); font-size:.66rem; color:var(--ink-2)}
+.escribiendo::after{content:'▮'; color:var(--intrusivo); animation:parp 1s steps(2) infinite}
+@keyframes parp{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.escribiendo::after{animation:none}}
+
+/* ── Caja de consulta ── */
+.consulta{display:flex; flex-direction:column; gap:.5rem;
+  border-top:1px solid var(--ink); padding:.7rem 1.1rem .9rem; background:var(--sheet)}
+.consulta select{grid-column:1 / -1; width:100%;
+  font-family:var(--f-mono); font-size:.68rem; color:var(--ink);
+  background:var(--sheet-2); border:1px solid var(--neat); padding:.4rem .45rem}
+.fila-motor{grid-column:1 / -1; display:flex; gap:.5rem; align-items:stretch}
+.fila-motor select{flex:1}
+#btnThink{all:unset; cursor:pointer; font-family:var(--f-mono); font-size:.68rem;
+  letter-spacing:.06em; color:var(--ink); background:var(--sheet-2);
+  border:1px solid var(--neat); padding:.4rem .6rem; white-space:nowrap}
+#btnThink[aria-pressed="true"]{background:var(--intrusivo); color:#fff; border-color:var(--intrusivo)}
+#btnThink[disabled]{opacity:.4; cursor:default}
+.consulta textarea{resize:none; min-height:3.6rem; max-height:11rem;
+  font-family:var(--f-cuerpo); font-size:.92rem; color:var(--ink);
+  background:var(--sheet-2); border:1px solid var(--neat); padding:.5rem .65rem; width:100%}
+.consulta textarea:focus{border-color:var(--intrusivo); background:var(--field-focus)}
+/* 📎 y ➤ EMBEBIDOS dentro del textarea (ambos verticalmente centrados, con gutter para el texto). */
+.input-wrap{position:relative; width:100%}
+.input-wrap textarea{padding-left:2.5rem; padding-right:2.9rem}
+.icono-adj{all:unset; cursor:pointer; position:absolute; left:.55rem; top:50%; transform:translateY(-50%);
+  font-size:.9rem; line-height:1; color:var(--ink-2); opacity:.6; padding:.15rem; transition:opacity .15s}
+.icono-adj:hover{opacity:1; color:var(--ink)}
+.icono-adj:focus-visible{outline:2px solid var(--intrusivo); outline-offset:2px}
+.envio-centro{position:absolute; right:.5rem; top:50%; transform:translateY(-50%);
+  display:flex; gap:.3rem; align-items:center}
+.btn-enviar{all:unset; cursor:pointer; width:1.85rem; height:1.85rem;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--intrusivo); color:#fff; font-size:.82rem; line-height:1; border-radius:50%;
+  transition:background .15s, transform .05s}
+.btn-enviar:hover{background:#a23a26}
+.btn-enviar:active{transform:translateY(1px)}
+.btn-enviar:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.btn-enviar[disabled]{background:#b7a29c; cursor:default}
+.btn-enviar.btn--stop{background:var(--ink)} .btn-enviar.btn--stop:hover{background:#000}
+.btn-enviar[hidden]{display:none}
+.botones{display:flex; gap:.35rem}
+.btn{all:unset; cursor:pointer; font-family:var(--f-rotulo); font-weight:600;
+  font-size:.82rem; letter-spacing:.08em; text-transform:uppercase;
+  background:var(--intrusivo); color:#fff; padding:.5rem 1.05rem}
+.btn:hover{background:#a23a26}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.btn[disabled]{background:#b7a29c; cursor:default}
+.btn--stop{background:var(--ink)} .btn--stop:hover{background:#000}
+.btn[hidden]{display:none}
+
+@media (max-width:900px){
+  .hoja{flex-direction:column}
+  .resizer{display:none}
+  .leyenda{width:auto; max-height:30vh; border-right:none; border-bottom:1px solid var(--ink)}
+  .visor{min-height:45vh; border-bottom:1px solid var(--ink)}
+  .perfil{width:auto; flex:1}
+  .cartela{flex-wrap:wrap} .cartela .titulo{min-width:0; flex:1}
+  .cartela .medicion{display:none}
+  .pregunta,.ficha{max-width:100%}
+  .hilo{padding:1rem .9rem} .consulta{padding:.6rem .9rem .8rem}
+}
+/* ── Pensamiento de DeepSeek ── */
+.pensamiento-details{border:1px dashed var(--neat); background:var(--sheet-2);
+  padding:.45rem .65rem; margin-bottom:.7rem; font-size:.78rem}
+.pensamiento-details summary{cursor:pointer; font-family:var(--f-mono);
+  color:var(--volc); font-weight:500; outline:none; user-select:none}
+.pensamiento-details summary .cerebro{display:inline-block; margin-right:.15rem}
+/* mientras piensa: color pulsante + cerebro latiendo (solo en vivo) */
+.pensamiento-details.pensando summary{color:var(--meta)}
+.pensamiento-details.pensando summary .cerebro{animation:cerebro-late 1.1s ease-in-out infinite}
+.pensamiento-details.pensando summary .lbl{animation:pensando-fade 1.5s ease-in-out infinite}
+@keyframes cerebro-late{0%,100%{transform:scale(1)} 50%{transform:scale(1.25)}}
+@keyframes pensando-fade{0%,100%{opacity:.5} 50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){
+  .pensamiento-details.pensando summary .cerebro,
+  .pensamiento-details.pensando summary .lbl{animation:none}
+}
+.pensamiento-cuerpo{font-family:var(--f-cuerpo); font-style:italic;
+  color:var(--ink-2); margin-top:.4rem; white-space:pre-wrap; line-height:1.4}
+
+/* ── Panel Quiz-me (Tarea 5) ── */
+.quiz-panel {
+  background: var(--sheet);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.quiz-panel[hidden], .quiz-seccion[hidden] {
+  display: none !important;
+}
+.quiz-panel.fullscreen {
+  position: fixed;
+  inset: 0;
+  height: 100vh !important;
+  z-index: 70;
+  border-top: none;
+}
+.quiz-cab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.45rem 0.8rem;
+  border-bottom: 1px solid var(--neat);
+  background: var(--sheet-2);
+}
+.quiz-cab .rot {
+  font-family: var(--f-rotulo);
+  font-weight: 700;
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  color: var(--intrusivo);
+}
+.quiz-cab .quiz-alcance {
+  font-family: var(--f-mono);
+  font-size: 0.64rem;
+  color: var(--ink-2);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quiz-cab .mini {
+  margin-left: 0.3rem;
+}
+.quiz-contenido {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem 1.1rem;
+  position: relative;
+}
+.quiz-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  height: 100%;
+}
+.quiz-form {
+  max-width: 580px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  width: 100%;
+}
+.quiz-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.quiz-campo label {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.quiz-opciones-grupo {
+  display: flex;
+  gap: 1.2rem;
+}
+.quiz-opciones-grupo label {
+  font-family: var(--f-cuerpo);
+  font-size: 0.86rem;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.quiz-inputs-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+.quiz-inputs-fila label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  font-family: var(--f-cuerpo);
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+.quiz-inputs-fila input {
+  width: 50px;
+  background: var(--sheet-2);
+  border: 1px solid var(--neat);
+  padding: 0.2rem 0.4rem;
+  color: var(--ink);
+  font-family: var(--f-mono);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.quiz-campo select {
+  font-family: var(--f-mono);
+  font-size: 0.76rem;
+  background: var(--sheet-2);
+  border: 1px solid var(--neat);
+  padding: 0.35rem 0.5rem;
+  color: var(--ink);
+}
+.quiz-cargando {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  padding: 2rem;
+  gap: 0.5rem;
+}
+.quiz-hint {
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  color: var(--ink-2);
+}
+.quiz-progreso-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  color: var(--ink-2);
+}
+.quiz-progreso-bg {
+  flex: 1;
+  height: 4px;
+  background: var(--neat-2);
+  position: relative;
+}
+.quiz-progreso-fill {
+  height: 100%;
+  background: var(--intrusivo);
+  width: 0%;
+  transition: width 0.2s ease;
+}
+.quiz-pregunta-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+.quiz-pregunta-fig {
+  margin: 0 auto 0.5rem;
+  max-width: min(100%, 480px);
+  border: 1px solid var(--ink);
+}
+.quiz-pregunta-fig img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.quiz-enunciado {
+  font-size: 0.96rem;
+  font-weight: 500;
+  line-height: 1.45;
+  border-left: 3px solid var(--volc);
+  padding-left: 0.6rem;
+}
+.quiz-respuestas-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.quiz-respuestas-area label {
+  background: var(--sheet-2);
+  border: 1px solid var(--neat);
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+.quiz-respuestas-area label:hover {
+  background: var(--hover);
+  border-color: var(--ink-2);
+}
+.quiz-respuestas-area label input[type="radio"] {
+  margin-top: 0.2rem;
+  accent-color: var(--intrusivo);
+}
+.quiz-vf-botones {
+  display: flex;
+  gap: 1rem;
+  max-width: 320px;
+}
+.quiz-vf-btn {
+  all: unset;
+  flex: 1;
+  text-align: center;
+  cursor: pointer;
+  font-family: var(--f-rotulo);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  padding: 0.6rem;
+  border: 1px solid var(--neat);
+  background: var(--sheet-2);
+  color: var(--ink);
+}
+.quiz-vf-btn:hover {
+  background: var(--hover);
+  border-color: var(--ink-2);
+}
+.quiz-vf-btn.seleccionado {
+  background: var(--intrusivo);
+  color: #fff;
+  border-color: var(--intrusivo);
+}
+.quiz-desarrollo-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.quiz-desarrollo-area textarea {
+  width: 100%;
+  min-height: 80px;
+  background: var(--sheet-2);
+  border: 1px solid var(--neat);
+  padding: 0.5rem 0.6rem;
+  font-family: var(--f-cuerpo);
+  font-size: 0.88rem;
+  color: var(--ink);
+  resize: vertical;
+}
+.quiz-desarrollo-area textarea:focus {
+  border-color: var(--intrusivo);
+  background: var(--field-focus);
+  outline: none;
+}
+.quiz-feedback-box[hidden] {
+  display: none !important;
+}
+.quiz-feedback-box {
+  background: var(--sheet-2);
+  border: 1px solid var(--neat);
+  border-left: 4px solid var(--meta);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.quiz-feedback-box.incorrecta {
+  border-left-color: var(--intrusivo);
+}
+.quiz-feedback-box .resultado-rot {
+  font-family: var(--f-mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.quiz-feedback-box .explicacion {
+  margin-top: 0.2rem;
+}
+.quiz-feedback-box .cita-lbl {
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  color: var(--ink-2);
+  margin-top: 0.3rem;
+  border-top: 1px dashed var(--neat);
+  padding-top: 0.2rem;
+}
+.quiz-navegacion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-top: 1px solid var(--neat);
+  padding-top: 0.6rem;
+  flex: none;
+}
+.quiz-resultado-resumen {
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.quiz-resultado-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.4rem;
+}
+.quiz-resultado-cab h4 {
+  font-family: var(--f-rotulo);
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+}
+.quiz-resultado-score {
+  font-family: var(--f-mono);
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--intrusivo);
+}
+.quiz-resultado-detalle {
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.quiz-debilidades-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.quiz-debilidad-item {
+  background: var(--sheet-2);
+  border: 1px solid var(--neat);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.84rem;
+}
+.quiz-debilidad-item .sec-lbl {
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--intrusivo);
+}
+.quiz-debilidad-item .preg-lbl {
+  margin-top: 0.15rem;
+}
+.quiz-debilidad-item .btn-anki-sola {
+  margin-top: 0.25rem;
+}
+.quiz-acciones-finales {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  border-top: 1px solid var(--neat);
+  padding-top: 0.6rem;
+}
+
+/* ── Pestañas Consulta / Quiz (panel derecho) ── */
+.panel-tabs{display:flex; flex:none; border-bottom:1px solid var(--ink); background:var(--sheet-2)}
+.panel-tab{all:unset; cursor:pointer; flex:1; text-align:center;
+  font-family:var(--f-rotulo); font-weight:700; font-size:.7rem; letter-spacing:.12em;
+  padding:.5rem .4rem; color:var(--ink-2); border-bottom:2px solid transparent;
+  transition:color .15s, border-color .15s, background .15s}
+.panel-tab:hover{background:var(--sheet); color:var(--ink)}
+.panel-tab.activo{color:var(--intrusivo); border-bottom-color:var(--intrusivo); background:var(--sheet)}
+.panel-tab:focus-visible{outline:2px solid var(--intrusivo); outline-offset:-2px}
+.panel-vista{flex:1; display:flex; flex-direction:column; min-height:0}
+.panel-vista[hidden]{display:none}
+
+/* ── Modal de configuración (claves API + perfil del tutor) ── */
+.cfg-caja{width:min(680px,96vw); height:min(88vh,780px)}
+.cfg-body{flex:1; overflow-y:auto; padding:.9rem 1rem; display:flex; flex-direction:column; gap:1.1rem}
+.cfg-bienvenida{border:1px solid var(--meta); border-left:4px solid var(--meta); background:var(--sheet-2);
+  padding:.65rem .85rem; font-size:.84rem; line-height:1.45}
+.cfg-bienvenida[hidden]{display:none}
+.cfg-bienvenida strong{color:var(--meta)}
+.cfg-token-aviso{border:1px solid var(--sed); border-left:4px solid var(--sed); background:var(--sheet-2);
+  padding:.55rem .8rem; display:flex; align-items:center; gap:.7rem; flex-wrap:wrap}
+.cfg-token-aviso[hidden]{display:none}
+.cfg-token-aviso .cfg-token-txt{flex:1; min-width:180px; font-family:var(--f-mono); font-size:.7rem; color:var(--ink-2)}
+.cfg-seccion{display:flex; flex-direction:column; gap:.6rem}
+.cfg-seccion>h3{font-family:var(--f-rotulo); font-weight:700; font-size:.9rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink); border-bottom:1px solid var(--neat); padding-bottom:.25rem}
+.cfg-keys{display:flex; flex-direction:column; gap:.7rem}
+.cfg-key{border:1px solid var(--neat); background:var(--sheet-2); padding:.55rem .7rem;
+  display:flex; flex-direction:column; gap:.42rem}
+.cfg-key.destacada{border-color:var(--meta); box-shadow:inset 3px 0 0 var(--meta)}
+.cfg-key-cab{display:flex; align-items:center; gap:.55rem; flex-wrap:wrap}
+.cfg-key-nom{font-family:var(--f-rotulo); font-weight:600; font-size:.95rem; letter-spacing:.02em}
+.cfg-tag{font-family:var(--f-mono); font-size:.55rem; letter-spacing:.04em; padding:.08rem .35rem;
+  border:1px solid; text-transform:uppercase; white-space:nowrap}
+.cfg-tag--free{color:var(--meta); border-color:var(--meta)}
+.cfg-tag--paid{color:var(--sed); border-color:var(--sed)}
+.cfg-key-estado{margin-left:auto; font-family:var(--f-mono); font-size:.62rem; color:var(--ink-2); white-space:nowrap}
+.cfg-key-estado.def{color:var(--meta)}
+.cfg-key-desc{font-family:var(--f-cuerpo); font-size:.74rem; color:var(--ink-2); line-height:1.35}
+.cfg-key-fila{display:flex; align-items:center; gap:.45rem; flex-wrap:wrap}
+.cfg-input,.cfg-region{font-family:var(--f-mono); font-size:.72rem; color:var(--ink);
+  background:var(--sheet); border:1px solid var(--neat); padding:.35rem .5rem}
+.cfg-input{flex:1; min-width:150px}
+.cfg-input:focus,.cfg-region:focus{border-color:var(--intrusivo); background:var(--field-focus); outline:none}
+.cfg-region{width:118px; flex:none}
+.cfg-probar-res{font-family:var(--f-mono); font-size:.66rem; min-width:1em; max-width:100%}
+.cfg-probar-res.ok{color:var(--meta)} .cfg-probar-res.err{color:var(--intrusivo)}
+.cfg-perfil{display:grid; grid-template-columns:1fr 1fr; gap:.6rem}
+.cfg-campo{display:flex; flex-direction:column; gap:.25rem}
+.cfg-campo label{font-family:var(--f-mono); font-size:.64rem; color:var(--ink-2); letter-spacing:.03em}
+.cfg-campo input, .cfg-campo select, .cfg-campo textarea{font-family:var(--f-cuerpo); font-size:.84rem; color:var(--ink);
+  background:var(--sheet-2); border:1px solid var(--neat); padding:.4rem .5rem}
+.cfg-campo input:focus, .cfg-campo select:focus, .cfg-campo textarea:focus{border-color:var(--intrusivo); background:var(--field-focus); outline:none}
+.cfg-campo-ancho{margin-top:.6rem}
+.cfg-campo-ancho textarea{resize:vertical; font-family:inherit}
+.cfg-ayuda{font-family:var(--f-mono); font-size:.66rem; color:var(--ink-2)}
+.cfg-ayuda-top{margin-bottom:.6rem}
+.cfg-barra{flex:none; display:flex; align-items:center; gap:.8rem; padding:.6rem .9rem;
+  border-top:1px solid var(--ink); background:var(--sheet-2)}
+.cfg-msg{flex:1; font-family:var(--f-mono); font-size:.7rem; color:var(--ink-2); min-width:0}
+.cfg-msg.ok{color:var(--meta)} .cfg-msg.err{color:var(--intrusivo)}
+@media (max-width:560px){.cfg-perfil{grid-template-columns:1fr}}
+
+/* ── Banner de aviso (mismatch de embeddings) ── */
+.banner-mismatch{background:var(--intrusivo); color:#fff; font-family:var(--f-mono); font-size:.72rem;
+  padding:.5rem 1rem; text-align:center; letter-spacing:.02em; border-bottom:1px solid var(--ink); line-height:1.4}
+.banner-mismatch[hidden]{display:none}
+
+/* ── Tarjeta de onboarding (corpus vacío) ── */
+.onboarding{background:var(--sheet-2); border:1px solid var(--neat); border-left:4px solid var(--sed);
+  padding:1rem 1.2rem}
+.onboarding h4{font-family:var(--f-rotulo); font-weight:700; font-size:1.12rem; letter-spacing:.02em; margin-bottom:.5rem}
+.onboarding p{font-size:.9rem; line-height:1.5}
+.onboarding ol{margin:.7rem 0 .3rem 1.15rem; display:flex; flex-direction:column; gap:.5rem; font-size:.88rem; line-height:1.45}
+.onboarding code{font-family:var(--f-mono); font-size:.82em; background:var(--code-bg); padding:.05em .3em}
+.onboarding .ob-hint{font-family:var(--f-mono); font-size:.68rem; color:var(--ink-2); margin-top:.7rem;
+  border-top:1px dashed var(--neat); padding-top:.5rem}
+</style>
+</head>
+<body>
+
+<div id="bannerMismatch" class="banner-mismatch" hidden></div>
+
+<header class="cartela">
+  <div class="titulo">
+    <span class="eyebrow">Carta de documento</span>
+    <span class="wordmark">Ga<span class="ia">IA</span></span>
+    <span class="datum">DATUM local · 1 unidad = 1 sección</span>
+  </div>
+  <div class="campo">
+    <div class="brujula" aria-hidden="true"><span class="aguja">▲</span>N</div>
+    <select id="selCuaderno" aria-label="Cuaderno" title="Cuaderno (área de estudio)"></select>
+    <select id="selDoc" aria-label="Documento indexado"></select>
+    <button type="button" id="btnCuad" class="mini" title="Gestionar cuadernos">⚙ cuadernos</button>
+  </div>
+  <div class="medicion"><span class="tick" id="dot"></span><span id="estadoTxt">conectando…</span>
+    <button type="button" id="btnConfig" class="tema-btn" title="Configuración (claves API y perfil)"
+      aria-label="Abrir configuración">⚙</button>
+    <button type="button" id="btnTema" class="tema-btn" title="Alternar claro/oscuro"
+      aria-label="Alternar tema claro/oscuro">◐</button>
+  </div>
+</header>
+
+<main class="hoja">
+  <aside class="leyenda" id="panelIzq" aria-label="Leyenda de secciones">
+    <div class="leyenda-cab">LEYENDA <span class="cuenta" id="nSecs"></span></div>
+    <ol id="log" class="unidades"></ol>
+  </aside>
+
+  <div class="resizer" id="rzIzq" role="separator" aria-label="Ajustar leyenda"></div>
+
+  <section class="visor" id="panelPdf" aria-label="Visor de PDF">
+    <div class="visor-cab">
+      <span class="rot">GaIA · PDF</span>
+      <span class="doc" id="pdfDoc">—</span>
+      <button type="button" id="btnPdfTab" class="mini" title="Abrir en pestaña nueva">↗ pestaña</button>
+    </div>
+    <iframe id="pdfFrame" title="Documento PDF" hidden></iframe>
+    <div class="visor-vacio" id="pdfVacio">Elige un documento en la cartela para verlo aquí.</div>
+  </section>
+
+  <div class="resizer" id="rzDer" role="separator" aria-label="Ajustar chat"></div>
+
+  <section class="perfil" id="panelChat" aria-label="Consulta al documento">
+    <div class="panel-tabs">
+      <button type="button" id="tabConsulta" class="panel-tab activo">◎ CONSULTA</button>
+      <button type="button" id="tabQuiz" class="panel-tab">❓ QUIZ</button>
+    </div>
+    <div id="vistaConsulta" class="panel-vista">
+    <div class="regla" aria-hidden="true">
+      <span class="e1">510 000 E</span><span class="e2">7 415 000 N</span><span class="e3">UTM 19S</span>
+    </div>
+    <div class="libretas">
+      <span class="lib-rot">LIBRETA</span>
+      <button type="button" id="btnNueva" class="mini">＋ nueva</button>
+      <select id="selConv" class="mini-sel" aria-label="Libretas guardadas"></select>
+      <button type="button" id="btnGestLib" class="mini" title="Editar / borrar libretas">✎</button>
+    </div>
+    <div id="hilo" class="hilo">
+      <article class="ficha" data-id="A—A′">
+        <h4>Hoja lista</h4>
+        <div class="cuerpo"><p>Elige un documento en la cartela. Toca una unidad de la
+        <em>leyenda</em> para leer su resumen al instante, o formula una consulta abajo: el
+        asistente responde citando el paper y explica figuras, gráficos y tablas. Si el dato
+        no está en el documento, lo busca en la web y lo advierte.</p></div>
+      </article>
+    </div>
+    <form id="formPregunta" class="consulta">
+      <div id="adjBar" hidden style="display:flex;gap:6px;flex-wrap:wrap;width:100%;padding:4px 0"></div>
+      <div class="fila-motor">
+        <select id="selProv" aria-label="Modelo LLM"></select>
+        <button type="button" id="btnThink" aria-pressed="false"
+                title="Razonamiento explícito de DeepSeek (más lento, más profundo)">🧠 PENSAMIENTO</button>
+      </div>
+      <div class="input-wrap">
+        <button type="button" class="icono-adj" id="btnAdj" title="Adjuntar captura (p.ej. una tabla del PDF) — requiere modelo con ·visión">📎</button>
+        <textarea id="inp" placeholder="Pregúntale a GaIA…" aria-label="Consulta"></textarea>
+        <span class="envio-centro">
+          <button type="submit" class="btn-enviar" id="btnEnviar" title="Consultar" aria-label="Consultar">➤</button>
+          <button type="button" class="btn-enviar btn--stop" id="btnStop" title="Detener" aria-label="Detener" hidden>■</button>
+        </span>
+      </div>
+      <input type="file" id="adjFile" accept="image/*" multiple hidden>
+    </form>
+    </div>
+    <div id="vistaQuiz" class="panel-vista" hidden>
+        <div id="panelQuiz" class="quiz-panel">
+      <div class="quiz-cab">
+        <span class="quiz-alcance" id="quizAlcance">Todo el paper</span>
+        <button type="button" id="quizFullscreen" class="mini" title="Pantalla completa">⤢</button>
+      </div>
+      
+      <div class="quiz-contenido">
+        <!-- Configuración Inicial -->
+        <div id="quizConfig" class="quiz-seccion">
+          <div class="quiz-form">
+            <div class="quiz-campo">
+              <label>Mezcla de preguntas:</label>
+              <div class="quiz-inputs-fila">
+                <label>Opción Múltiple: <input type="number" id="quizNMc" value="4" min="0" max="15"></label>
+                <label>Verdadero/Falso: <input type="number" id="quizNVf" value="4" min="0" max="15"></label>
+                <label>Desarrollo: <input type="number" id="quizNDes" value="2" min="0" max="10"></label>
+              </div>
+            </div>
+            
+            <div class="quiz-campo">
+              <label>Dificultad:</label>
+              <select id="quizDificultad">
+                <option value="facil">Fácil</option>
+                <option value="media" selected>Media</option>
+                <option value="dificil">Difícil</option>
+              </select>
+            </div>
+            
+            <div class="quiz-campo">
+              <label>Modelo LLM:</label>
+              <select id="quizModelSelector"></select>
+            </div>
+            
+            <button type="button" class="btn" id="btnIniciarQuiz">Generar evaluación</button>
+          </div>
+        </div>
+
+        <!-- Cargando -->
+        <div id="quizCarga" class="quiz-seccion" hidden>
+          <div class="quiz-cargando">
+             <span class="escribiendo">Generando preguntas basadas en el contexto</span>
+             <p class="quiz-hint">Esto puede tomar hasta un minuto dependiendo del modelo seleccionado.</p>
+          </div>
+        </div>
+        
+        <!-- Preguntas -->
+        <div id="quizPreguntas" class="quiz-seccion" hidden>
+          <div class="quiz-progreso-barra">
+            <span id="quizPreguntaActual">Pregunta 1 de 10</span>
+            <div class="quiz-progreso-bg"><div id="quizProgresoFill" class="quiz-progreso-fill"></div></div>
+          </div>
+          
+          <div class="quiz-pregunta-box">
+            <div id="quizPreguntaFig" class="quiz-pregunta-fig" hidden></div>
+            <div id="quizPreguntaEnunciado" class="quiz-enunciado"></div>
+            <div id="quizPreguntaRespuestas" class="quiz-respuestas-area"></div>
+            <div id="quizPreguntaFeedback" class="quiz-feedback-box" hidden></div>
+          </div>
+          
+          <div class="quiz-navegacion">
+            <button type="button" id="btnQuizAnt" class="mini">◀ Anterior</button>
+            <button type="button" id="btnQuizSig" class="mini">Siguiente ▶</button>
+          </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="quizResultados" class="quiz-seccion" hidden>
+          <div class="quiz-resultado-resumen">
+            <div class="quiz-resultado-cab">
+              <h4>INFORME DE EVALUACIÓN</h4>
+              <span id="quizResultadoScore" class="quiz-resultado-score">0 / 100</span>
+            </div>
+            <div id="quizResultadoDetalle" class="quiz-resultado-detalle"></div>
+            
+            <h5>PREGUNTAS EVALUADAS</h5>
+            <div id="quizResultadoDebilidades" class="quiz-debilidades-lista"></div>
+            
+            <div class="quiz-acciones-finales">
+              <button type="button" id="btnAnkiTodasFalladas" class="mini">→ Anki (todas las falladas)</button>
+              <button type="button" id="btnQuizReiniciar" class="btn">Terminar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </section>
+</main>
+
+<div id="modalFigs" class="modal" hidden>
+  <div class="modal-caja">
+    <div class="modal-cab">
+      <span class="rot">REVISIÓN DE FIGURAS</span>
+      <span class="doc" id="figDoc"></span>
+      <button type="button" id="figVolver" class="mini" hidden>← galería</button>
+      <button type="button" id="figCerrar" class="mini">✕ cerrar</button>
+    </div>
+    <div id="figGrid" class="fig-grid"></div>
+    <div id="figCrop" class="fig-crop" hidden>
+      <div class="fig-crop-area"><img id="figCropImg" alt="Figura a recortar"></div>
+      <div class="fig-crop-barra">
+        <span class="cap" id="figCropCap"></span>
+        <button type="button" id="figRestaurar" class="mini">Restaurar original</button>
+        <button type="button" id="figGuardar" class="btn">Guardar recorte</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modalCuad" class="modal" hidden>
+  <div class="modal-caja">
+    <div class="modal-cab">
+      <span class="rot">CUADERNOS</span>
+      <span class="doc" id="cuadTitulo">Agrupa documentos por área para acotar el RAG</span>
+      <button type="button" id="cuadNuevo" class="mini">＋ nuevo</button>
+      <button type="button" id="cuadVolver" class="mini" hidden>← lista</button>
+      <button type="button" id="cuadCerrar" class="mini">✕ cerrar</button>
+    </div>
+    <div class="cuad-body">
+      <div id="cuadLista" class="cuad-lista"></div>
+      <div id="cuadEditor" class="cuad-editor" hidden>
+        <input type="text" id="cuadNombre" class="nombre" placeholder="Nombre del cuaderno (ej. Pórfidos)">
+        <div class="cuad-hint">Marca los documentos que pertenecen a este cuaderno:</div>
+        <div id="cuadDocs" class="cuad-docs"></div>
+        <div class="cuad-barra">
+          <button type="button" id="cuadBorrar" class="mini" hidden>Borrar cuaderno</button>
+          <button type="button" id="cuadGuardar" class="btn">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modalAnki" class="modal" hidden>
+  <div class="modal-caja">
+    <div class="modal-cab">
+      <span class="rot">TARJETAS ANKI</span>
+      <span class="doc" id="ankiTema"></span>
+      <button type="button" id="ankiAdd" class="mini">＋ tarjeta</button>
+      <button type="button" id="ankiCopiar" class="mini">⧉ copiar TSV</button>
+      <button type="button" id="ankiDescargar" class="mini">⭳ .txt</button>
+      <button type="button" id="ankiCerrar" class="mini">✕ cerrar</button>
+    </div>
+    <div id="ankiLista" class="anki-lista"></div>
+  </div>
+</div>
+
+<div id="modalLib" class="modal" hidden>
+  <div class="modal-caja lib-caja">
+    <div class="modal-cab">
+      <span class="rot">LIBRETAS</span>
+      <span class="doc">Carga una conversación, o edita para borrar</span>
+      <button type="button" id="libScopeCuad" class="mini act">Este cuaderno</button>
+      <button type="button" id="libScopeAll" class="mini">Todas</button>
+      <button type="button" id="libEditar" class="mini">✎ editar</button>
+      <button type="button" id="libBorrar" class="mini peligro" hidden>🗑 <span id="libCount">0</span></button>
+      <button type="button" id="libCerrar" class="mini">✕ cerrar</button>
+    </div>
+    <div id="libLista" class="lib-lista"></div>
+  </div>
+</div>
+
+<div id="modalConfig" class="modal" hidden>
+  <div class="modal-caja cfg-caja">
+    <div class="modal-cab">
+      <span class="rot">CONFIGURACIÓN</span>
+      <span class="doc" id="cfgSubtitulo">Tu perfil de estudio y claves API</span>
+      <button type="button" id="cfgCerrar" class="mini">✕ cerrar</button>
+    </div>
+    <div class="cfg-body">
+      <div id="cfgBienvenida" class="cfg-bienvenida" hidden>
+        <strong>Para empezar, GaIA necesita al menos la clave GRATUITA de Google Gemini.</strong>
+        Se usa para vectorizar el corpus y para el chat. Consíguela en Google AI Studio, pégala abajo
+        y pulsa <em>Guardar</em>. Las demás claves son opcionales.
+      </div>
+      <div id="cfgTokenAviso" class="cfg-token-aviso" hidden>
+        <span class="cfg-token-txt">No hay token de seguridad definido. Genera uno para proteger la app.</span>
+        <button type="button" id="cfgGenToken" class="mini">Generar token de seguridad</button>
+      </div>
+      <section class="cfg-seccion">
+        <h3>Tu perfil de estudio</h3>
+        <div class="cfg-ayuda cfg-ayuda-top">GaIA adapta a esto TODAS sus explicaciones, el quiz y las tarjetas.
+          Déjalo en blanco y será un tutor genérico. ¿No sabes qué poner? Pídele a tu agente de IA que te entreviste (ver README).</div>
+        <div class="cfg-perfil">
+          <div class="cfg-campo"><label>Nombre</label><input id="cfgNombre" type="text" autocomplete="off" placeholder="cómo quieres que te llame"></div>
+          <div class="cfg-campo"><label>Rol / profesión</label><input id="cfgRol" type="text" autocomplete="off" placeholder="geólogo, médico, docente de sedimentología…"></div>
+          <div class="cfg-campo"><label>Disciplina / tema</label><input id="cfgDisciplina" type="text" autocomplete="off" placeholder="geología, medicina interna, derecho…"></div>
+          <div class="cfg-campo"><label>Nivel</label>
+            <select id="cfgNivel">
+              <option value="principiante">Principiante</option>
+              <option value="intermedio">Intermedio</option>
+              <option value="avanzado">Avanzado</option>
+            </select>
+          </div>
+          <div class="cfg-campo"><label>Objetivo</label><input id="cfgObjetivo" type="text" autocomplete="off" placeholder="entender papers densos, preparar un examen…"></div>
+        </div>
+        <div class="cfg-campo cfg-campo-ancho">
+          <label>Instrucciones al tutor</label>
+          <textarea id="cfgInstrucciones" rows="5" placeholder="Cómo quieres que te responda. Ej.: define en una línea los términos técnicos nuevos la primera vez; cierra las explicaciones de conceptos nuevos con UNA pregunta corta de comprobación; no uses tablas anchas…"></textarea>
+          <div class="cfg-ayuda">Aplica solo al chat (no al quiz ni a las tarjetas Anki).</div>
+        </div>
+      </section>
+      <section class="cfg-seccion">
+        <h3>Claves API</h3>
+        <div id="cfgKeys" class="cfg-keys"></div>
+      </section>
+      <section class="cfg-seccion">
+        <h3>Descripción de imágenes</h3>
+        <div class="cfg-campo">
+          <label>Cómo describir las figuras y tablas al ingerir un PDF</label>
+          <select id="cfgVision">
+            <option value="bedrock">Claude Sonnet (Bedrock) — de pago, mejor calidad</option>
+            <option value="gemini">Gemini — gratis con tu clave de Google</option>
+            <option value="manual">Sin API / Agente IA — Claude Code o Antigravity las describen gratis</option>
+          </select>
+          <div class="cfg-key-desc">Con «Sin API / Agente IA», la ingesta deja las imágenes pendientes con
+            instrucciones autocontenidas en <code>descripciones/&lt;doc&gt;_PENDIENTES/</code> para que tu
+            herramienta de IA agéntica las describa sin gastar ninguna clave.</div>
+        </div>
+      </section>
+    </div>
+    <div class="cfg-barra">
+      <span id="cfgMsg" class="cfg-msg"></span>
+      <button type="button" id="cfgGuardar" class="btn">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const TOKEN = "__RAG_TOKEN__";
+const HDRS  = TOKEN ? {"Authorization": "Bearer " + TOKEN} : {};
+const $ = id => document.getElementById(id);
+let DOC = localStorage.getItem("testigo-doc") || null;  // se valida en renderSelDoc si aún existe
+let N_RESP = 0, controller = null, OUTLINE = [];
+
+function render(el, md){
+  const mathBlocks = [];
+  // Oculta el marcador de figura durante el streaming; finalizar() lo sustituye por la imagen.
+  let processed = (md || "").replace(/\[\[FIG:\s*\d+\s*\]\]/g, "");
+  // Normaliza LaTeX roto: el modelo a veces envuelve fórmulas con $ escapado ($\$>1 km\$$).
+  processed = processed.replace(/\$\\\$/g,"$").replace(/\\\$\$/g,"$").replace(/\\\$/g,"$");
+
+  // 1. Ocultar bloques math grandes ($$ ... $$)
+  processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (match, math) => {
+    const id = mathBlocks.length;
+    mathBlocks.push({ math: math, display: true });
+    return `KATEXPLACEHOLDER${id}`;
+  });
+
+  // 2. Ocultar bloques \[ ... \]
+  processed = processed.replace(/\\\[([\s\S]+?)\\\]/g, (match, math) => {
+    const id = mathBlocks.length;
+    mathBlocks.push({ math: math, display: true });
+    return `KATEXPLACEHOLDER${id}`;
+  });
+
+  // 3. Ocultar bloques \( ... \)
+  processed = processed.replace(/\\\(([\s\S]+?)\\\)/g, (match, math) => {
+    const id = mathBlocks.length;
+    mathBlocks.push({ math: math, display: false });
+    return `KATEXPLACEHOLDER${id}`;
+  });
+
+  // 4. Ocultar bloques inline ($ ... $) sin confundir con símbolos de dólar comunes
+  processed = processed.replace(/\$([^\$\s\n](?:[^\$\n]*?[^\$\s\n])?)\$/g, (match, math) => {
+    const id = mathBlocks.length;
+    mathBlocks.push({ math: math, display: false });
+    return `KATEXPLACEHOLDER${id}`;
+  });
+
+  // Los modelos usan "~" como "aprox." (~190 casos); marked lo tomaría como tachado (~texto~).
+  // Escapar tildes sueltas (las ~~dobles~~ intencionales se respetan).
+  processed = processed.replace(/(^|[^~\\])~(?!~)/g, "$1\\~");
+
+  // Parsear markdown
+  let html = window.marked ? marked.parse(processed) : processed;
+
+  // Restaurar y renderizar bloques de KaTeX directamente
+  html = html.replace(/KATEXPLACEHOLDER(\d+)/g, (match, id) => {
+    const block = mathBlocks[parseInt(id, 10)];
+    if (!block) return match;
+    try {
+      if (window.katex) {
+        return katex.renderToString(block.math, {
+          displayMode: block.display,
+          throwOnError: false
+        });
+      }
+    } catch (e) {
+      console.error("Error renderizando KaTeX:", e);
+    }
+    // Fallback si KaTeX falla o no está cargado
+    return block.display ? `$$${block.math}$$` : `$${block.math}$`;
+  });
+
+  // Envolver tablas en un contenedor scrolleable (evita que desborden la columna de chat)
+  html = html.replace(/<table>/g, '<div class="tabla-scroll"><table>')
+             .replace(/<\/table>/g, '</table></div>');
+
+  el.innerHTML = html;
+}
+const esc = s => s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const limpiaTit = s => s.replace(/\[([^\]]*)\]\([^)]*\)/g,"$1").replace(/\\+$/,"").replace(/\\([*_#])/g,"$1").trim();
+/* nombre legible de una fuente (arregla los "(sin título; sección: X)") */
+function nombreFuente(f){
+  const t = f.titulo || "";
+  const m = t.match(/sin t[ií]tulo.*?secci[oó]n:\s*(.+?)\)?$/i);
+  if(m) return (f.type==="table"?"Tabla":"Figura") + " · " + m[1].trim();
+  return limpiaTit(t) || f.source;
+}
+
+/* ── Tooltip de preview de fuente (compartido) ── */
+const TIP = document.createElement("div"); TIP.className="tip"; TIP.hidden=true;
+document.body.appendChild(TIP);
+const _TIPO = {text:"texto", figure:"figura", table:"tabla"};
+function fuenteDe(el){
+  const art = el.closest(".ficha"); if(!art || !art._fuentes) return null;
+  return art._fuentes[el.dataset.n] || null;
+}
+function mostrarTip(f, el){
+  if(!f){ TIP.hidden=true; return; }
+  TIP.innerHTML =
+    `<div class="tip-cab"><span class="tip-tipo">${_TIPO[f.type]||"texto"}</span>`+
+    `${esc(nombreFuente(f))}<span class="tip-score">s=${f.score}</span></div>`+
+    `<div class="tip-cuerpo">${esc(f.preview||"(sin vista previa)")}</div>`;
+  TIP.hidden=false;
+  const r = el.getBoundingClientRect(), w=TIP.offsetWidth, h=TIP.offsetHeight;
+  let x = Math.max(8, Math.min(r.left, innerWidth-w-8));
+  let y = r.bottom+6; if(y+h > innerHeight-8) y = r.top-h-6;
+  TIP.style.left=x+"px"; TIP.style.top=y+"px";
+}
+function enlazarCitas(cuerpo){
+  cuerpo.innerHTML = cuerpo.innerHTML.replace(
+    /(Fuentes?\s+)(\d+)/g, '<span class="cita" data-n="$2">$1$2</span>');
+}
+// delegación: hover sobre .cita o chip con data-n
+const _hilo = document.getElementById("hilo");
+_hilo.addEventListener("mouseover", e=>{
+  const el = e.target.closest("[data-n]"); if(el) mostrarTip(fuenteDe(el), el);
+});
+_hilo.addEventListener("mouseout", e=>{
+  if(e.target.closest("[data-n]")) TIP.hidden=true;
+});
+
+async function salud(){
+  try{ const d = await (await fetch("/health")).json();
+    if(d.status!=="ok") throw 0;
+    $("dot").className="tick ok"; $("estadoTxt").textContent="conectado";
+  }catch{ $("dot").className="tick err"; $("estadoTxt").textContent="sin conexión"; }
+}
+const TODOS={id:"", nombre:"Todos los documentos", docs:[]};
+// Restaura el cuaderno guardado como stub {id}; cargarCuadernos lo resuelve al objeto real
+// (o cae a TODOS si ese cuaderno ya no existe).
+const _cuadGuardado = localStorage.getItem("testigo-cuaderno");
+let DOCS_ALL=[], CUADS=[], CUAD = _cuadGuardado ? {id:_cuadGuardado, docs:[]} : TODOS;
+
+function guardarScope(){
+  if(CUAD.id) localStorage.setItem("testigo-cuaderno", CUAD.id);
+  else localStorage.removeItem("testigo-cuaderno");
+  if(DOC) localStorage.setItem("testigo-doc", DOC);
+  else localStorage.removeItem("testigo-doc");
+}
+
+async function cargarDocs(){
+  const d = await (await fetch("/documentos")).json();
+  DOCS_ALL = d.docs || [];
+  await cargarCuadernos();          // define CUADS + pinta selector de cuaderno
+  renderSelDoc();                   // valida DOC contra el cuaderno (lo anula si ya no existe)
+  guardarScope();                   // resincroniza localStorage por si DOC/CUAD caducó
+  await cargarOutline();
+}
+async function cargarCuadernos(){
+  try{ const d=await (await fetch("/cuadernos")).json(); CUADS=d.cuadernos||[]; }
+  catch{ CUADS=[]; }
+  // si el cuaderno activo dejó de existir, volver a Todos
+  if(CUAD.id && !CUADS.find(c=>c.id===CUAD.id)) CUAD=TODOS;
+  else if(CUAD.id) CUAD=CUADS.find(c=>c.id===CUAD.id);
+  renderSelCuaderno();
+}
+function renderSelCuaderno(){
+  const sel=$("selCuaderno"); sel.innerHTML="";
+  const opt=(v,t)=>{ const o=document.createElement("option"); o.value=v; o.textContent=t; sel.appendChild(o); };
+  opt("", "▤ Todos");
+  CUADS.forEach(c=> opt(c.id, "▤ "+c.nombre));
+  sel.value = CUAD.id || "";
+}
+function docsDelCuaderno(){
+  if(!CUAD.id) return DOCS_ALL;                    // modo Todos
+  const set=new Set(CUAD.docs||[]);
+  return DOCS_ALL.filter(d=> set.has(d.source));
+}
+function renderSelDoc(){
+  const sel=$("selDoc"); sel.innerHTML="";
+  const primero=document.createElement("option");
+  primero.value=""; primero.textContent = CUAD.id ? "— Todo el cuaderno —" : "— Todos los documentos —";
+  sel.appendChild(primero);
+  for(const doc of docsDelCuaderno()){ const o=document.createElement("option");
+    o.value=doc.source; o.textContent=doc.source; sel.appendChild(o); }
+  const disponibles=new Set([...sel.options].map(o=>o.value));
+  if(!disponibles.has(DOC||"")) DOC=null;
+  sel.value=DOC||"";
+}
+$("selDoc").addEventListener("change", async e => { DOC=e.target.value||null; guardarScope(); await cargarOutline(); });
+$("selCuaderno").addEventListener("change", async e => {
+  CUAD = e.target.value ? (CUADS.find(c=>c.id===e.target.value)||TODOS) : TODOS;
+  DOC=null; guardarScope(); renderSelDoc(); await cargarOutline(); await cargarLibretas();
+});
+
+let MOTORES = [];
+let THINK = localStorage.getItem("testigo-think")==="1";
+async function cargarProveedores(){
+  const d = await (await fetch("/providers")).json();
+  MOTORES = d.motores || [];
+  const sel = $("selProv"); sel.innerHTML="";
+  // agrupar por proveedor (optgroups), en el orden en que llegan del backend
+  const grupos = new Map();
+  MOTORES.forEach((m,i)=>{
+    const g = m.grupo || m.provider;
+    if(!grupos.has(g)) grupos.set(g, []);
+    grupos.get(g).push([m,i]);
+  });
+  for(const [g, lista] of grupos){
+    const og = document.createElement("optgroup"); og.label = g;
+    for(const [m,i] of lista){
+      const o = document.createElement("option"); o.value = i;
+      o.textContent = m.label + (m.vision ? "  ·visión" : "");
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+  // selección: la última usada (persistida) → si no, el default del backend
+  const guardado = localStorage.getItem("testigo-motor");
+  let idx = MOTORES.findIndex(m => m.model === guardado);
+  if(idx < 0) idx = MOTORES.findIndex(m => m.model === d.default_model);
+  if(idx < 0) idx = 0;
+  sel.value = idx;
+  sel.addEventListener("change", ()=>{
+    localStorage.setItem("testigo-motor", motorBase().model || "");
+    pintarThink();
+  });
+  pintarThink();
+  copiarModelosAQuiz();
+}
+function motorBase(){ return MOTORES[+$("selProv").value] || {}; }
+function motorSel(){ const m = motorBase(); return {...m, thinking: !!(THINK && m.thinking_capaz)}; }
+function pintarThink(){
+  const b = $("btnThink"), m = motorBase();
+  b.disabled = !m.thinking_capaz;
+  b.title = m.thinking_capaz
+    ? "Razonamiento explícito de DeepSeek (más lento, más profundo)"
+    : "El pensamiento solo está disponible en los modelos DeepSeek";
+  b.setAttribute("aria-pressed", (THINK && m.thinking_capaz) ? "true" : "false");
+}
+$("btnThink").addEventListener("click", ()=>{
+  if($("btnThink").disabled) return;
+  THINK = !THINK; localStorage.setItem("testigo-think", THINK ? "1" : "0"); pintarThink();
+});
+function mostrarPDF(){
+  const fr=$("pdfFrame"), vac=$("pdfVacio");
+  if(!DOC){ fr.hidden=true; vac.hidden=false; $("pdfDoc").textContent="—"; return; }
+  fr.src = "/pdf?doc="+encodeURIComponent(DOC)+"#zoom=page-width";
+  fr.hidden=false; vac.hidden=true; $("pdfDoc").textContent=DOC;
+}
+$("btnPdfTab").addEventListener("click", ()=>{
+  if(DOC) window.open("/pdf?doc="+encodeURIComponent(DOC), "_blank");
+});
+
+async function cargarOutline(){
+  mostrarPDF();
+  const log=$("log"); log.innerHTML=""; $("nSecs").textContent=""; OUTLINE=[];
+  if(!DOC){
+    const ambito = CUAD.id ? ("el cuaderno «"+esc(CUAD.nombre)+"»") : "todos los documentos";
+    log.innerHTML = '<li class="leyenda-hint">Elige un documento arriba para ver su índice y su PDF.'+
+      '<br><br>El chat responde sobre <strong>'+ambito+'</strong>.</li>';
+    return;
+  }
+  try{
+    const r = await fetch("/outline?doc="+encodeURIComponent(DOC));
+    if(!r.ok){ $("nSecs").textContent="sin esquema"; return; }
+    OUTLINE = (await r.json()).secciones;
+    $("nSecs").textContent = "n="+OUTLINE.length;
+    OUTLINE.forEach((s,i)=>{
+      const li=document.createElement("li");
+      li.className = "n"+Math.min(s.nivel,3)+(s.resumen?"":" sin-resumen");
+      li.style.setProperty("--i",i);
+      li.innerHTML = `<button type="button" class="btn-outline-sec">
+        <span class="sw" aria-hidden="true"></span>
+        <span class="cod">${String(i+1).padStart(2,"0")}</span>
+        <span class="rot">${esc(limpiaTit(s.titulo))}</span></button>`;
+      li.querySelector(".btn-outline-sec").addEventListener("click",()=>{
+        document.querySelectorAll(".unidades li").forEach(x=>x.classList.remove("activa"));
+        li.classList.add("activa"); mostrarResumen(s,i);
+      });
+      log.appendChild(li);
+    });
+  }catch{ $("nSecs").textContent="error"; }
+}
+function mostrarResumen(sec,i){
+  const art=document.createElement("article");
+  art.className="ficha ficha--seccion"; art.dataset.id="U-"+String(i+1).padStart(2,"0");
+  const cuerpo=document.createElement("div"); cuerpo.className="cuerpo";
+  art.innerHTML=`<h4>${esc(limpiaTit(sec.titulo))}</h4>`; art.appendChild(cuerpo);
+  render(cuerpo, sec.resumen || "*Unidad contenedora — ver sus subunidades.*");
+  if(sec.resumen && sec.resumen.trim()){
+    const acc=document.createElement("div"); acc.className="acciones";
+    const b=document.createElement("button"); b.type="button"; b.className="mini";
+    b.textContent="🃏 Anki";
+    b.addEventListener("click",()=>generarAnki(sec.resumen, limpiaTit(sec.titulo)));
+    acc.appendChild(b); art.appendChild(acc);
+  }
+  $("hilo").appendChild(art); art.scrollIntoView({block:"start"});
+}
+
+$("formPregunta").addEventListener("submit", e=>{ e.preventDefault(); enviar(); });
+$("inp").addEventListener("keydown", e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); enviar(); }});
+$("btnStop").addEventListener("click", ()=>{ if(controller) controller.abort(); });
+
+/* ── Pintado de fichas (compartido: en vivo y al cargar una libreta) ── */
+function pintarPregunta(q){
+  const p=document.createElement("div"); p.className="pregunta";
+  p.innerHTML=`<span class="rotulo">CONSULTA</span>${esc(q)}`; $("hilo").appendChild(p);
+}
+function nuevaFicha(n, placeholder){
+  const art=document.createElement("article"); art.className="ficha";
+  art.dataset.id="R-"+String(n).padStart(2,"0");
+  const aviso=document.createElement("div"); aviso.className="aviso-web"; aviso.hidden=true;
+  const cuerpo=document.createElement("div"); cuerpo.className="cuerpo";
+  if(placeholder) cuerpo.innerHTML=`<span class="escribiendo">consultando</span>`;
+  art.appendChild(aviso); art.appendChild(cuerpo);
+  $("hilo").appendChild(art); art.scrollIntoView({block:"start"});
+  return {art,cuerpo,aviso};
+}
+/* HTML de una figura inline (imagen original + caption corto + pie original colapsable) */
+function figuraHTML(f){
+  const m = (f.titulo||"").match(/(?:fig(?:ure|ura)?)\.?\s*(\d+)/i);
+  const corto = m ? ("Figura "+m[1]) : "Figura";
+  return `<figure class="fig-inline"><img loading="lazy" alt="${esc(f.titulo)}"`+
+    ` src="/figura?doc=${encodeURIComponent(f.source)}&img=${encodeURIComponent(f.img)}">`+
+    `<figcaption><span class="fig-lbl">${corto} · ${esc(f.source)}</span>`+
+    `<details class="fig-cap"><summary>ver pie original</summary>${esc(nombreFuente(f))}</details>`+
+    `</figcaption></figure>`;
+}
+/* números de fuente REALMENTE citados en el cuerpo ("Fuente 1", "Fuente 1, Fuente 2",
+   "Fuentes 1 y 2"). Sirve para mostrar solo los chips usados y ocultar el resto. */
+function citadasEn(texto){
+  const set = new Set();
+  const re = /Fuentes?\s+(\d+(?:\s*(?:,|y|Y)\s*\d+)*)/g;
+  let m;
+  while((m = re.exec(texto || ""))){
+    (m[1].match(/\d+/g) || []).forEach(n => set.add(String(n)));
+  }
+  return set;
+}
+
+/* números de figura pedidos en la pregunta del usuario ("figura 2", "figs 2 y 3") */
+function numsFigPreguntados(q){
+  const s = new Set(); const re = /\bfig(?:uras?|ures?|s|\.)?\s*(\d+)/gi; let m;
+  while((m = re.exec(q || ""))) s.add(parseInt(m[1], 10));
+  return s;
+}
+/* número de figura del PIE de una fuente ("**Figure 7:** ..." -> 7) */
+function numCaptionFig(f){
+  const m = /\bfig(?:ure|ura)?\.?\s*(\d+)/i.exec((f && f.titulo) || "");
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function finalizar(art, cuerpo, aviso, texto, fuentes, web, pregunta, thought){
+  art._fuentes={}; (fuentes||[]).forEach(f=>{ art._fuentes[f.n]=f; });
+  const emitidas = new Set();
+  if(thought && !art.querySelector(".pensamiento-details")){
+    const detailsEl = document.createElement("details");
+    detailsEl.className = "pensamiento-details";
+    detailsEl.open = false;
+    detailsEl.innerHTML = `<summary><span class="cerebro">🧠</span><span class="lbl">Pensamiento</span></summary>`;
+    const thoughtBodyEl = document.createElement("div");
+    thoughtBodyEl.className = "pensamiento-cuerpo";
+    thoughtBodyEl.textContent = thought;
+    detailsEl.appendChild(thoughtBodyEl);
+    art.insertBefore(detailsEl, cuerpo);
+  }
+  // 1) Sustituir marcadores [[FIG:N]] por la imagen inline en su posición.
+  let txt = (texto||"").replace(/\[\[FIG:\s*(\d+)\s*\]\]/g, (m,n)=>{
+    const f = art._fuentes[n];
+    if(f && f.type==="figure" && f.img){ emitidas.add(String(n)); return "\n\n"+figuraHTML(f)+"\n\n"; }
+    return "";  // fuente inválida/sin imagen → quitar el marcador
+  });
+  render(cuerpo, txt);
+  const citadas = citadasEn(texto);   // fuentes realmente citadas (Fuente N) en el cuerpo
+  // 2) Respaldo de figura: SOLO si preguntaste explícitamente por "la figura N" y el modelo
+  //    no la insertó con [[FIG]]. Se busca esa figura por su número de PIE entre las fuentes
+  //    y se muestra. NO se cuelga una figura solo porque el modelo la citó para un dato
+  //    (eso metía figuras ajenas, p. ej. la Fig. 7 al preguntar por la Fig. 2).
+  if(!emitidas.size){
+    const pedidos = numsFigPreguntados(pregunta);
+    if(pedidos.size){
+      for(const f of (fuentes||[])){
+        if(f.type==="figure" && f.img && pedidos.has(numCaptionFig(f)) && !emitidas.has(String(f.n))){
+          const d=document.createElement("div"); d.innerHTML=figuraHTML(f);
+          cuerpo.appendChild(d.firstChild); emitidas.add(String(f.n));
+        }
+      }
+    }
+  }
+  if(web){ aviso.hidden=false; aviso.textContent="⚠ "+web; art.classList.add("ficha--web"); }
+  enlazarCitas(cuerpo);
+  // Chips: mostrar SOLO las fuentes citadas en el cuerpo (+ figuras mostradas inline).
+  // Se recuperan todas para no perder calidad, pero se ocultan las que el tutor no usó.
+  emitidas.forEach(n => citadas.add(String(n)));
+  const visibles = (fuentes || []).filter(f => citadas.has(String(f.n)));
+  if(visibles.length){
+    const cont=document.createElement("div"); cont.className="fuentes";
+    for(const f of visibles){
+      const b=document.createElement("button"); b.type="button"; b.className="chip "+f.type;
+      b.dataset.n=f.n;
+      b.innerHTML=`<span class="u" aria-hidden="true"></span>${f.n} · ${esc(nombreFuente(f).slice(0,38))}`;
+      if(f.type==="figure"&&f.img) b.addEventListener("click",()=>toggleFigura(art,f));
+      cont.appendChild(b);
+    }
+    art.appendChild(cont);
+  }
+  if(texto && texto.trim()){
+    const acc=document.createElement("div"); acc.className="acciones";
+    const b=document.createElement("button"); b.type="button"; b.className="mini";
+    b.textContent="🃏 Anki";
+    b.addEventListener("click",()=>generarAnki(texto, "Respuesta "+(art.dataset.id||"")));
+    acc.appendChild(b); art.appendChild(acc);
+  }
+}
+
+/* ── Libretas (conversaciones persistentes en el backend) ── */
+let CONV = {id:null, doc:null, titulo:"", ts:0, turnos:[]};
+const introHTML = $("hilo").innerHTML;
+function limpiarHilo(conIntro){ $("hilo").innerHTML = conIntro ? introHTML : ""; }
+
+async function guardarConv(){
+  if(!CONV.id) return;
+  try{
+    await fetch("/conversacion",{method:"POST",
+      headers:{...HDRS,"Content-Type":"application/json"}, body:JSON.stringify(CONV)});
+    await cargarLibretas();
+  }catch{}
+}
+async function cargarLibretas(){
+  try{
+    const d=await (await fetch("/conversaciones",{headers:HDRS})).json();
+    const sel=$("selConv"); const actual=CONV.id||"";
+    sel.innerHTML='<option value="">Libretas guardadas…</option>';
+    for(const c of d.conversaciones){
+      if((c.cuaderno||"") !== (CUAD.id||"")) continue;   // solo las del cuaderno activo
+      const o=document.createElement("option"); o.value=c.id;
+      const f=new Date(c.ts||Date.now());
+      const fecha=f.toLocaleDateString()+" "+f.toLocaleTimeString().slice(0,5);
+      o.textContent=`${fecha} · ${(c.titulo||"—").slice(0,36)} (${c.n})`;
+      if(c.id===actual) o.selected=true;
+      sel.appendChild(o);
+    }
+  }catch{}
+}
+async function cargarConversacion(id){
+  try{
+    const d=await (await fetch("/conversacion?id="+encodeURIComponent(id),{headers:HDRS})).json();
+    limpiarHilo(false); N_RESP=0; CONV=d;
+    // sincronizar cuaderno + documento desde la libreta
+    const cid=d.cuaderno||"";
+    CUAD = cid ? (CUADS.find(c=>c.id===cid)||TODOS) : TODOS;
+    renderSelCuaderno();
+    DOC = d.doc || null; renderSelDoc(); guardarScope(); await cargarOutline();
+    for(const t of (d.turnos||[])){
+      pintarPregunta(t.q);
+      const f=nuevaFicha(++N_RESP,false);
+      finalizar(f.art,f.cuerpo,f.aviso,t.a,t.fuentes||[],t.web||null,t.q,t.thought);
+    }
+  }catch{}
+}
+$("btnNueva").addEventListener("click", ()=>{
+  CONV={id:null, doc:DOC, cuaderno:CUAD.id, titulo:"", ts:0, turnos:[]}; N_RESP=0;
+  limpiarHilo(true); $("selConv").value="";
+});
+$("selConv").addEventListener("change", e=>{ if(e.target.value) cargarConversacion(e.target.value); });
+
+/* ── Gestor de libretas (cargar / borrar conversaciones) ── */
+let LIB_ALL=[], libScope="cuad", libEdit=false;
+const libSel=new Set();
+async function abrirGestorLib(){
+  libEdit=false; libSel.clear();
+  try{
+    const d=await (await fetch("/conversaciones",{headers:HDRS})).json();
+    LIB_ALL=d.conversaciones||[];
+  }catch{ LIB_ALL=[]; }
+  $("modalLib").hidden=false; libRender();
+}
+function libFiltradas(){
+  return libScope==="all" ? LIB_ALL
+    : LIB_ALL.filter(c=>(c.cuaderno||"")===(CUAD.id||""));
+}
+function nombreCuad(id){
+  if(!id) return "Todos";
+  const c=CUADS.find(x=>x.id===id); return c?c.nombre:"—";
+}
+function libActualizarBorrar(){
+  const n=libSel.size;
+  $("libCount").textContent=n;
+  $("libBorrar").hidden=!libEdit;
+  $("libBorrar").disabled=!(libEdit&&n);
+}
+function libRender(){
+  const caja=$("modalLib").querySelector(".modal-caja");
+  caja.classList.toggle("editando", libEdit);
+  $("libEditar").classList.toggle("act", libEdit);
+  $("libEditar").textContent=libEdit?"✓ listo":"✎ editar";
+  $("libScopeCuad").classList.toggle("act", libScope==="cuad");
+  $("libScopeAll").classList.toggle("act", libScope==="all");
+  const cont=$("libLista"); cont.innerHTML="";
+  const filas=libFiltradas();
+  if(!filas.length){
+    cont.innerHTML='<div class="lib-vacio">No hay libretas guardadas'+(libScope==="cuad"?" en este cuaderno.":".")+'</div>';
+    libActualizarBorrar(); return;
+  }
+  filas.forEach(c=>{
+    const f=new Date(c.ts||Date.now());
+    const fecha=f.toLocaleDateString()+" "+f.toLocaleTimeString().slice(0,5);
+    const meta=(libScope==="all"?esc(nombreCuad(c.cuaderno))+" · ":"")+fecha+" · "+(c.n||0);
+    const fila=document.createElement("div");
+    fila.className="lib-fila"+(libSel.has(c.id)?" sel":"");
+    fila.innerHTML=`<span class="circ"></span><span class="tit">${esc(c.titulo||"—")}</span>`+
+      `<span class="meta">${meta}</span>`;
+    fila.addEventListener("click",()=>{
+      if(libEdit){
+        if(libSel.has(c.id)){ libSel.delete(c.id); fila.classList.remove("sel"); }
+        else{ libSel.add(c.id); fila.classList.add("sel"); }
+        libActualizarBorrar();
+      }else{
+        $("modalLib").hidden=true; cargarConversacion(c.id);
+      }
+    });
+    cont.appendChild(fila);
+  });
+  libActualizarBorrar();
+}
+async function libBorrarSel(){
+  const n=libSel.size; if(!n) return;
+  if(!confirm(`¿Borrar ${n} libreta${n>1?"s":""}? Esta acción no se puede deshacer.`)) return;
+  const ids=[...libSel];
+  await Promise.all(ids.map(id=>
+    fetch("/conversacion?id="+encodeURIComponent(id),{method:"DELETE",headers:HDRS}).catch(()=>{})));
+  if(CONV.id && libSel.has(CONV.id)){         // se borró la libreta abierta → limpia el hilo
+    CONV={id:null, doc:DOC, cuaderno:CUAD.id, titulo:"", ts:0, turnos:[]}; N_RESP=0;
+    limpiarHilo(true); $("selConv").value="";
+  }
+  libSel.clear();
+  LIB_ALL=LIB_ALL.filter(c=>!ids.includes(c.id));
+  await cargarLibretas(); libRender();
+}
+$("btnGestLib").addEventListener("click", abrirGestorLib);
+$("libCerrar").addEventListener("click", ()=>{ $("modalLib").hidden=true; });
+$("modalLib").addEventListener("click", e=>{ if(e.target.id==="modalLib") $("modalLib").hidden=true; });
+$("libEditar").addEventListener("click", ()=>{ libEdit=!libEdit; if(!libEdit) libSel.clear(); libRender(); });
+$("libScopeCuad").addEventListener("click", ()=>{ libScope="cuad"; libSel.clear(); libRender(); });
+$("libScopeAll").addEventListener("click", ()=>{ libScope="all"; libSel.clear(); libRender(); });
+$("libBorrar").addEventListener("click", libBorrarSel);
+
+/* ── Capturas adjuntas al chat (p.ej. una tabla del PDF que marker desordenó) ── */
+let IMGS_ADJ=[];
+function pintarAdjuntos(){
+  const bar=$("adjBar"); bar.innerHTML=""; bar.hidden=!IMGS_ADJ.length;
+  IMGS_ADJ.forEach((du,i)=>{
+    const w=document.createElement("span");
+    w.style.cssText="position:relative;display:inline-block";
+    w.innerHTML=`<img src="${du}" style="height:52px;border:1px solid var(--borde,#999)" alt="adjunto ${i+1}">`+
+      `<button type="button" title="quitar" style="position:absolute;top:-6px;right:-6px;cursor:pointer;`+
+      `border:1px solid #900;background:#fff;color:#900;border-radius:50%;width:18px;height:18px;`+
+      `line-height:1;font-size:11px;padding:0">✕</button>`;
+    w.querySelector("button").onclick=()=>{ IMGS_ADJ.splice(i,1); pintarAdjuntos(); };
+    bar.appendChild(w);
+  });
+}
+function agregarAdjunto(file){
+  if(!file || !file.type.startsWith("image/") || IMGS_ADJ.length>=3) return;
+  const m=motorSel();
+  if(!m.vision){ alert("Para adjuntar imágenes elige un motor con '·visión' (Gemini o Gemma)."); return; }
+  const rd=new FileReader();
+  rd.onload=()=>{ IMGS_ADJ.push(rd.result); pintarAdjuntos(); };
+  rd.readAsDataURL(file);
+}
+$("btnAdj").addEventListener("click", ()=>$("adjFile").click());
+$("adjFile").addEventListener("change", e=>{ [...e.target.files].forEach(agregarAdjunto); e.target.value=""; });
+$("inp").addEventListener("paste", e=>{
+  const items=[...(e.clipboardData?.items||[])].filter(it=>it.type.startsWith("image/"));
+  if(items.length){ e.preventDefault(); items.forEach(it=>agregarAdjunto(it.getAsFile())); }
+});
+
+async function enviar(){
+  const q=$("inp").value.trim(); if(!q||controller) return;
+  const m0=motorSel();
+  if(IMGS_ADJ.length && !m0.vision){
+    alert("Adjuntaste imágenes pero el motor seleccionado no tiene visión. Elige uno con '·visión'.");
+    return;
+  }
+  $("inp").value="";
+  const adjuntas=IMGS_ADJ.slice(); IMGS_ADJ=[]; pintarAdjuntos();
+  if(!CONV.id) CONV={id:crypto.randomUUID(), doc:DOC, cuaderno:CUAD.id, titulo:q.slice(0,60), ts:Date.now(), turnos:[]};
+  pintarPregunta(q + (adjuntas.length ? `  📎×${adjuntas.length}` : ""));
+  const {art,cuerpo,aviso}=nuevaFicha(++N_RESP, true);
+  $("btnEnviar").disabled=true; $("btnStop").hidden=false; controller=new AbortController();
+
+  let texto="", fuentes=[], web=null, thoughtText="", huboError=false;
+  let detailsEl=null, thoughtBodyEl=null;
+  try{
+    const m=motorSel();
+    const historial=(CONV.turnos||[]).slice(-4).map(t=>({q:t.q, a:(t.a||"").slice(0,900)}));
+    // Alcance del RAG: un doc concreto, si no el cuaderno activo, si no todo el corpus.
+    const scope = DOC ? {doc:DOC} : (CUAD.id ? {docs:CUAD.docs} : {});
+    const r=await fetch("/ask",{method:"POST",signal:controller.signal,
+      headers:{...HDRS,"Content-Type":"application/json"},
+      body:JSON.stringify({query:q, provider:m.provider||null, model:m.model||null,
+                           thinking:!!m.thinking, ...scope, historial,
+                           ...(adjuntas.length ? {imagenes_usuario:adjuntas} : {})})});
+    if(!r.ok){ let msj=""; try{ msj=(await r.json()).detail||""; }catch{} throw new Error(msj||("HTTP "+r.status)); }
+    const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="";
+    for(;;){ const {done,value}=await reader.read(); if(done)break;
+      buf+=dec.decode(value,{stream:true}); const ls=buf.split("\n"); buf=ls.pop();
+      for(const ln of ls){ if(!ln.trim())continue; let d; try{d=JSON.parse(ln);}catch{continue;}
+        if(d.nota){ web=d.nota; }
+        if(d.thought){
+          if(!detailsEl){
+            detailsEl = document.createElement("details");
+            detailsEl.className = "pensamiento-details pensando";
+            detailsEl.open = false;   // colapsado: el usuario lo despliega si quiere
+            detailsEl.innerHTML = `<summary><span class="cerebro">🧠</span><span class="lbl">Pensando…</span></summary>`;
+            thoughtBodyEl = document.createElement("div");
+            thoughtBodyEl.className = "pensamiento-cuerpo";
+            detailsEl.appendChild(thoughtBodyEl);
+            art.insertBefore(detailsEl, cuerpo);
+          }
+          const escr = cuerpo.querySelector(".escribiendo");
+          if(escr) escr.remove();
+          thoughtText += d.thought;
+          thoughtBodyEl.textContent = thoughtText;
+          art.scrollIntoView({block:"end"});
+        }
+        if(d.token){
+          const escr = cuerpo.querySelector(".escribiendo");
+          if(escr) escr.remove();
+          texto+=d.token;
+          render(cuerpo,texto);
+        }
+        if(d.error){ texto+=`\n\n**Error:** ${d.error}`; render(cuerpo,texto); huboError=true; }
+        if(d.done){ fuentes=d.sources||[]; }
+      }
+    }
+  }catch(err){
+    if(err.name==="AbortError"){ texto += "\n\n*(detenido)*"; }
+    else{ texto += `\n\n**Error:** ${err.message}`; huboError=true; }
+  }
+  finally{ controller=null; $("btnEnviar").disabled=false; $("btnStop").hidden=true; }
+
+  if(detailsEl){                       // el pensamiento en vivo terminó: para la animación y reetiqueta
+    detailsEl.classList.remove("pensando");
+    const lbl=detailsEl.querySelector(".lbl"); if(lbl) lbl.textContent="Pensamiento";
+  }
+  finalizar(art, cuerpo, aviso, texto, fuentes, web, q, thoughtText);
+  if(huboError){
+    // No persistir el turno con error: ni a la libreta ni al historial que se reinyecta al
+    // modelo. En su lugar, ofrecer reintentar (con el motor que esté seleccionado ahora).
+    const b=document.createElement("button"); b.type="button"; b.className="mini";
+    b.textContent="↻ Reintentar";
+    b.addEventListener("click",()=>{ b.remove(); $("inp").value=q; enviar(); });
+    art.appendChild(b);
+  }else{
+    CONV.turnos.push({q, a:texto, fuentes, web, thought: thoughtText});
+    guardarConv();
+  }
+}
+function toggleFigura(art,f){
+  const id="fig-"+f.n+"-"+art.dataset.id;
+  const ya=art.querySelector("#"+CSS.escape(id)); if(ya){ ya.remove(); return; }
+  const fig=document.createElement("figure"); fig.className="fig-inline"; fig.id=id;
+  fig.innerHTML=`<img loading="lazy" alt="${esc(f.titulo)}"
+    src="/figura?doc=${encodeURIComponent(f.source)}&img=${encodeURIComponent(f.img)}">
+    <figcaption>${esc(f.titulo)}</figcaption>`;
+  art.appendChild(fig);
+}
+
+/* ── Tema claro/oscuro (persiste) ── */
+function aplicarTema(t){
+  document.documentElement.dataset.theme = (t==="dark") ? "dark" : "";
+  $("btnTema").textContent = (t==="dark") ? "☀" : "◐";
+}
+let TEMA = localStorage.getItem("testigo-tema") || "light";
+aplicarTema(TEMA);
+$("btnTema").addEventListener("click", ()=>{
+  TEMA = (TEMA==="dark") ? "light" : "dark";
+  localStorage.setItem("testigo-tema", TEMA); aplicarTema(TEMA);
+});
+
+/* ── Divisores arrastrables entre columnas (persisten el ancho) ── */
+function initResizer(rz, panel, lado){
+  const key = "testigo-w-"+lado;
+  const g = localStorage.getItem(key); if(g) panel.style.width = g+"px";
+  let startX=0, startW=0, drag=false;
+  rz.addEventListener("mousedown", e=>{
+    drag=true; startX=e.clientX; startW=panel.getBoundingClientRect().width;
+    rz.classList.add("arrastrando"); document.body.style.userSelect="none";
+    document.body.style.cursor="col-resize";
+    // El iframe del PDF se traga los eventos del mouse → desactivarlo mientras se arrastra.
+    $("pdfFrame").style.pointerEvents="none";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", e=>{
+    if(!drag) return;
+    const dx = e.clientX - startX;
+    let w = (lado==="izq") ? startW + dx : startW - dx;
+    w = Math.max(180, Math.min(w, window.innerWidth*0.7));
+    panel.style.width = w+"px";
+  });
+  window.addEventListener("mouseup", ()=>{
+    if(!drag) return;
+    drag=false; rz.classList.remove("arrastrando");
+    document.body.style.userSelect=""; document.body.style.cursor="";
+    $("pdfFrame").style.pointerEvents="";
+    localStorage.setItem(key, Math.round(panel.getBoundingClientRect().width));
+  });
+}
+initResizer($("rzIzq"), $("panelIzq"), "izq");
+initResizer($("rzDer"), $("panelChat"), "der");
+
+/* ── Revisión / recorte de figuras ── */
+let FIGS=[], figActual=null, cropper=null;
+function figSrc(img, bust){
+  return "/figura?doc="+encodeURIComponent(DOC)+"&img="+encodeURIComponent(img)+(bust?("&t="+Date.now()):"");
+}
+async function abrirFigs(){
+  if(!DOC) return;
+  $("figDoc").textContent=DOC; $("modalFigs").hidden=false; volverGaleria();
+  const grid=$("figGrid");
+  grid.innerHTML='<p style="font-family:var(--f-mono);font-size:.7rem;color:var(--ink-2)">cargando…</p>';
+  try{
+    const d=await (await fetch("/figuras?doc="+encodeURIComponent(DOC))).json();
+    FIGS=d.figuras||[]; pintarGaleria();
+  }catch{ grid.innerHTML='<p style="font-family:var(--f-mono);font-size:.7rem">Error cargando figuras.</p>'; }
+}
+function pintarGaleria(){
+  const grid=$("figGrid"); grid.innerHTML="";
+  if(!FIGS.length){
+    grid.innerHTML='<p style="font-family:var(--f-mono);font-size:.7rem;color:var(--ink-2)">Este documento no tiene figuras indexadas.</p>';
+    return;
+  }
+  FIGS.forEach(f=>{
+    const card=document.createElement("div"); card.className="fig-card";
+    card.innerHTML=
+      `<div class="thumb"><img loading="lazy" src="${figSrc(f.img,true)}" alt=""></div>`+
+      `<div class="meta"><span class="cap">${esc(f.caption||f.img)}</span>`+
+      `<div class="fila">${f.editada?'<span class="marca">editada</span>':''}`+
+      `<button type="button" class="mini rec">✂ recortar</button></div></div>`;
+    card.querySelector(".rec").addEventListener("click",()=>abrirRecorte(f));
+    grid.appendChild(card);
+  });
+}
+function volverGaleria(){
+  if(cropper){ cropper.destroy(); cropper=null; }
+  figActual=null;
+  $("figCrop").hidden=true; $("figGrid").hidden=false; $("figVolver").hidden=true;
+}
+function abrirRecorte(f){
+  figActual=f;
+  $("figGrid").hidden=true; $("figCrop").hidden=false; $("figVolver").hidden=false;
+  $("figCropCap").textContent=f.caption||f.img;
+  const img=$("figCropImg");
+  if(cropper){ cropper.destroy(); cropper=null; }
+  img.onload=()=>{ cropper=new Cropper(img,{viewMode:1, autoCropArea:1, background:true,
+    movable:false, rotatable:false, zoomOnWheel:true}); };
+  img.src=figSrc(f.img,true);
+}
+async function guardarRecorte(){
+  if(!cropper||!figActual) return;
+  const c=cropper.getData(true);
+  const btn=$("figGuardar"); btn.disabled=true; btn.textContent="Guardando…";
+  try{
+    const r=await fetch("/figura/recortar",{method:"POST",
+      headers:{...HDRS,"Content-Type":"application/json"},
+      body:JSON.stringify({doc:DOC, img:figActual.img, x:c.x, y:c.y, w:c.width, h:c.height})});
+    if(!r.ok) throw 0;
+    figActual.editada=true; volverGaleria(); pintarGaleria();
+  }catch{ alert("No se pudo recortar la figura."); }
+  finally{ btn.disabled=false; btn.textContent="Guardar recorte"; }
+}
+async function restaurarFig(){
+  if(!figActual) return;
+  try{
+    await fetch("/figura/restaurar",{method:"POST",
+      headers:{...HDRS,"Content-Type":"application/json"},
+      body:JSON.stringify({doc:DOC, img:figActual.img})});
+    figActual.editada=false; abrirRecorte(figActual);
+  }catch{ alert("No se pudo restaurar."); }
+}
+$("figCerrar").addEventListener("click", ()=>{ volverGaleria(); $("modalFigs").hidden=true; });
+$("figVolver").addEventListener("click", volverGaleria);
+$("figGuardar").addEventListener("click", guardarRecorte);
+$("figRestaurar").addEventListener("click", restaurarFig);
+$("modalFigs").addEventListener("click", e=>{ if(e.target.id==="modalFigs"){ volverGaleria(); $("modalFigs").hidden=true; }});
+
+/* ── Generador de tarjetas Anki ── */
+let ANKI=[];
+function autoGrow(t){ t.style.height="auto"; t.style.height=(t.scrollHeight+2)+"px"; }
+function pintarAnki(){
+  const cont=$("ankiLista"); cont.innerHTML="";
+  if(!ANKI.length){ cont.innerHTML='<div class="anki-vacio">Sin tarjetas. Usa ＋ tarjeta para añadir una.</div>'; return; }
+  ANKI.forEach((c,i)=>{
+    const card=document.createElement("div"); card.className="anki-card";
+    card.innerHTML=`<span class="lbl">P</span><textarea class="q"></textarea>`+
+      `<span class="lbl">R</span><textarea class="a"></textarea>`+
+      `<button type="button" class="mini del">✕ borrar</button>`;
+    const q=card.querySelector(".q"), a=card.querySelector(".a");
+    q.value=c.q; a.value=c.a;
+    q.addEventListener("input",()=>{ ANKI[i].q=q.value; autoGrow(q); });
+    a.addEventListener("input",()=>{ ANKI[i].a=a.value; autoGrow(a); });
+    card.querySelector(".del").addEventListener("click",()=>{ ANKI.splice(i,1); pintarAnki(); });
+    cont.appendChild(card); autoGrow(q); autoGrow(a);
+  });
+}
+function limpiaCampoTSV(s){ return (s||"").replace(/\t/g," ").replace(/\r?\n/g,"<br>").trim(); }
+function tsvAnki(){
+  return ANKI.filter(c=>c.q.trim()&&c.a.trim())
+    .map(c=>limpiaCampoTSV(c.q)+"\t"+limpiaCampoTSV(c.a)).join("\n");
+}
+async function generarAnki(texto, tema){
+  if(!texto||!texto.trim()) return;
+  ANKI=[]; $("ankiTema").textContent=(tema||"").slice(0,60);
+  $("modalAnki").hidden=false;
+  $("ankiLista").innerHTML='<div class="anki-vacio">generando tarjetas…</div>';
+  try{
+    const m=motorSel();
+    const r=await fetch("/anki",{method:"POST",
+      headers:{...HDRS,"Content-Type":"application/json"},
+      body:JSON.stringify({texto, tema, doc:DOC, n:8, provider:m.provider||null, model:m.model||null})});
+    const d=await r.json();
+    ANKI=(d.cards||[]).map(c=>({q:c.q,a:c.a}));
+    if(!ANKI.length) $("ankiLista").innerHTML='<div class="anki-vacio">No se generaron tarjetas. Prueba con otro texto o modelo.</div>';
+    else pintarAnki();
+  }catch{ $("ankiLista").innerHTML='<div class="anki-vacio">Error generando tarjetas.</div>'; }
+}
+$("ankiCerrar").addEventListener("click",()=>{ $("modalAnki").hidden=true; });
+$("modalAnki").addEventListener("click", e=>{ if(e.target.id==="modalAnki") $("modalAnki").hidden=true; });
+$("ankiAdd").addEventListener("click",()=>{ ANKI.push({q:"",a:""}); pintarAnki(); });
+$("ankiCopiar").addEventListener("click", async ()=>{
+  const t=tsvAnki(); if(!t) return;
+  try{ await navigator.clipboard.writeText(t);
+    $("ankiCopiar").textContent="✓ copiado"; setTimeout(()=>$("ankiCopiar").textContent="⧉ copiar TSV",1500);
+  }catch{ alert("No se pudo copiar."); }
+});
+$("ankiDescargar").addEventListener("click",()=>{
+  const t=tsvAnki(); if(!t) return;
+  const blob=new Blob(["﻿"+t],{type:"text/tab-separated-values;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=(($("ankiTema").textContent||"tarjetas").slice(0,40).replace(/[^\w\- ]+/g,"_").trim()||"tarjetas")+".txt";
+  a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* ── Gestión de cuadernos ── */
+let cuadEditId=null;
+function abrirCuad(){ $("modalCuad").hidden=false; verCuadLista(); cuadPintarLista(); }
+function verCuadLista(){
+  $("cuadEditor").hidden=true; $("cuadLista").hidden=false; $("cuadVolver").hidden=true;
+  $("cuadTitulo").textContent="Agrupa documentos por área para acotar el RAG";
+}
+function cuadPintarLista(){
+  const cont=$("cuadLista"); cont.innerHTML="";
+  if(!CUADS.length){ cont.innerHTML='<div class="cuad-hint">Aún no hay cuadernos. Crea uno con ＋ nuevo.</div>'; return; }
+  CUADS.forEach(c=>{
+    const fila=document.createElement("div"); fila.className="cuad-fila";
+    fila.innerHTML=`<span class="nom">${esc(c.nombre)}</span>`+
+      `<span class="cnt">${(c.docs||[]).length} docs</span>`+
+      `<button type="button" class="mini editar">editar</button>`;
+    fila.querySelector(".editar").addEventListener("click",()=>cuadEditar(c));
+    cont.appendChild(fila);
+  });
+}
+function cuadEditar(c){
+  cuadEditId = c ? c.id : null;
+  $("cuadLista").hidden=true; $("cuadEditor").hidden=false; $("cuadVolver").hidden=false;
+  $("cuadTitulo").textContent = c ? "Editar cuaderno" : "Nuevo cuaderno";
+  $("cuadNombre").value = c ? c.nombre : "";
+  $("cuadBorrar").hidden = !c;
+  const set=new Set(c ? (c.docs||[]) : []);
+  const cont=$("cuadDocs"); cont.innerHTML="";
+  if(!DOCS_ALL.length){ cont.innerHTML='<div class="cuad-hint">No hay documentos indexados aún.</div>'; }
+  DOCS_ALL.forEach(d=>{
+    const lab=document.createElement("label");
+    lab.innerHTML=`<input type="checkbox" value="${esc(d.source)}" ${set.has(d.source)?"checked":""}>`+
+      `<span>${esc(d.source)}</span>`;
+    cont.appendChild(lab);
+  });
+}
+async function cuadGuardar(){
+  const nombre=$("cuadNombre").value.trim(); if(!nombre){ alert("Ponle un nombre al cuaderno."); return; }
+  const docs=[...$("cuadDocs").querySelectorAll("input:checked")].map(i=>i.value);
+  const btn=$("cuadGuardar"); btn.disabled=true;
+  try{
+    await fetch("/cuaderno",{method:"POST",headers:{...HDRS,"Content-Type":"application/json"},
+      body:JSON.stringify({id:cuadEditId, nombre, docs})});
+    await cargarCuadernos(); renderSelDoc(); await cargarOutline(); verCuadLista(); cuadPintarLista();
+  }catch{ alert("No se pudo guardar el cuaderno."); }
+  finally{ btn.disabled=false; }
+}
+async function cuadBorrar(){
+  if(!cuadEditId) return;
+  if(!confirm("¿Borrar este cuaderno? (los documentos NO se borran, solo la agrupación)")) return;
+  try{
+    await fetch("/cuaderno?id="+encodeURIComponent(cuadEditId),{method:"DELETE",headers:HDRS});
+    await cargarCuadernos(); renderSelDoc(); await cargarOutline(); await cargarLibretas();
+    verCuadLista(); cuadPintarLista();
+  }catch{ alert("No se pudo borrar."); }
+}
+$("btnCuad").addEventListener("click", abrirCuad);
+$("cuadCerrar").addEventListener("click", ()=>{ $("modalCuad").hidden=true; });
+$("modalCuad").addEventListener("click", e=>{ if(e.target.id==="modalCuad") $("modalCuad").hidden=true; });
+$("cuadNuevo").addEventListener("click", ()=>cuadEditar(null));
+$("cuadVolver").addEventListener("click", verCuadLista);
+$("cuadGuardar").addEventListener("click", cuadGuardar);
+$("cuadBorrar").addEventListener("click", cuadBorrar);
+
+/* ── Lógica de Quiz-me (Tarea 5) ── */
+let QUIZ_PREGUNTAS = [];
+let QUIZ_RESPUESTAS = {}; // {id: respuesta}
+let QUIZ_FEEDBACKS = {}; // {id: calificacion_desarrollo_obj}
+let QUIZ_INDICE = 0;
+let QUIZ_SECCION = null; // null si es de todo el paper
+let QUIZ_GENERANDO = false; // hay una generación en curso (fetch a /quiz/generar sin resolver)
+
+// Alterna entre la vista de consulta (chat) y la de quiz en el panel derecho.
+function activarTab(cual) {
+  const esQuiz = cual === "quiz";
+  $("vistaConsulta")?.toggleAttribute("hidden", esQuiz);
+  $("vistaQuiz")?.toggleAttribute("hidden", !esQuiz);
+  $("tabConsulta")?.classList.toggle("activo", !esQuiz);
+  $("tabQuiz")?.classList.toggle("activo", esQuiz);
+  localStorage.setItem("testigo-panel-tab", cual);
+  if (esQuiz) {
+    const elAlcance = $("quizAlcance");
+    if (elAlcance) elAlcance.textContent = DOC ? ("Todo el paper · " + DOC) : "Todo el paper";
+    // Si hay una generación en curso, NO resetear a config: mantener la pantalla de carga
+    // (el fetch sigue vivo por detrás; resetear haría creer que se puede regenerar → petición doble).
+    if (QUIZ_GENERANDO) {
+      $("quizConfig").hidden = true;
+      $("quizCarga").hidden = false;
+      $("quizPreguntas").hidden = true;
+      $("quizResultados").hidden = true;
+    } else if (QUIZ_PREGUNTAS.length === 0) {
+      volverConfigQuiz();
+    }
+  }
+}
+
+function volverConfigQuiz() {
+  const qConfig = $("quizConfig");
+  const qCarga = $("quizCarga");
+  const qPreguntas = $("quizPreguntas");
+  const qResultados = $("quizResultados");
+  
+  if (qConfig) qConfig.hidden = false;
+  if (qCarga) qCarga.hidden = true;
+  if (qPreguntas) qPreguntas.hidden = true;
+  if (qResultados) qResultados.hidden = true;
+  
+  copiarModelosAQuiz();
+}
+
+function copiarModelosAQuiz() {
+  const quizSel = $("quizModelSelector");
+  const chatSel = $("selProv");
+  if (!quizSel || !chatSel) return;
+  
+  quizSel.innerHTML = chatSel.innerHTML;
+  quizSel.value = chatSel.value;
+  const guardado = localStorage.getItem("testigo-quiz-motor");
+  if (guardado) quizSel.value = guardado;
+  
+  if (!quizSel.dataset.hasListener) {
+    quizSel.addEventListener("change", () => {
+      localStorage.setItem("testigo-quiz-motor", quizSel.value);
+    });
+    quizSel.dataset.hasListener = "true";
+  }
+}
+
+// Motor elegido en el panel del quiz (cae al del chat si no hay selección propia).
+function motorQuiz() {
+  const quizSel = $("quizModelSelector");
+  if (quizSel && quizSel.value) {
+    const m = MOTORES[parseInt(quizSel.value, 10)] || {};
+    return { provider: m.provider || null, model: m.model || null };
+  }
+  const m = motorSel();
+  return { provider: m.provider || null, model: m.model || null };
+}
+
+async function iniciarQuiz() {
+  try {
+    if (!DOC) {
+      alert("Elige un documento para realizar un quiz.");
+      return;
+    }
+
+    const { provider, model } = motorQuiz();
+
+    const n_mc = parseInt($("quizNMc")?.value || "0", 10) || 0;
+    const n_vf = parseInt($("quizNVf")?.value || "0", 10) || 0;
+    const n_des = parseInt($("quizNDes")?.value || "0", 10) || 0;
+    const dificultad = $("quizDificultad")?.value || "media";
+    
+    if (n_mc + n_vf + n_des === 0) {
+      alert("La mezcla debe contener al menos 1 pregunta.");
+      return;
+    }
+
+    localStorage.setItem("testigo-quiz-n_mc", n_mc);
+    localStorage.setItem("testigo-quiz-n_vf", n_vf);
+    localStorage.setItem("testigo-quiz-n_des", n_des);
+    localStorage.setItem("testigo-quiz-dificultad", dificultad);
+
+    const qConfig = $("quizConfig");
+    const qCarga = $("quizCarga");
+    if (qConfig) qConfig.hidden = true;
+    if (qCarga) qCarga.hidden = false;
+    QUIZ_GENERANDO = true;
+
+    const res = await fetch("/quiz/generar", {
+      method: "POST",
+      headers: { ...HDRS, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        doc: DOC,
+        seccion: QUIZ_SECCION,
+        n_mc,
+        n_vf,
+        n_desarrollo: n_des,
+        dificultad,
+        provider,
+        model
+      })
+    });
+    
+    if (!res.ok) {
+      let msg = "";
+      try { msg = (await res.json()).detail || ""; } catch {}
+      throw new Error(msg || "HTTP " + res.status);
+    }
+    
+    const d = await res.json();
+    QUIZ_PREGUNTAS = d.quiz || [];
+    QUIZ_RESPUESTAS = {};
+    QUIZ_FEEDBACKS = {};
+    QUIZ_INDICE = 0;
+    
+    if (QUIZ_PREGUNTAS.length === 0) {
+      throw new Error("El modelo no retornó preguntas válidas.");
+    }
+    
+    if (qCarga) qCarga.hidden = true;
+    const qPreguntas = $("quizPreguntas");
+    if (qPreguntas) qPreguntas.hidden = false;
+    
+    pintarPreguntaActual();
+    
+  } catch (err) {
+    alert("Error al generar el Quiz: " + err.message);
+    volverConfigQuiz();
+  } finally {
+    QUIZ_GENERANDO = false;
+  }
+}
+
+function pintarPreguntaActual() {
+  const preg = QUIZ_PREGUNTAS[QUIZ_INDICE];
+  if (!preg) return;
+  
+  const elPregActual = $("quizPreguntaActual");
+  if (elPregActual) elPregActual.textContent = `Pregunta ${QUIZ_INDICE + 1} de ${QUIZ_PREGUNTAS.length}`;
+  
+  const pct = ((QUIZ_INDICE + 1) / QUIZ_PREGUNTAS.length) * 100;
+  const elProgreso = $("quizProgresoFill");
+  if (elProgreso) elProgreso.style.width = pct + "%";
+  
+  const figBox = $("quizPreguntaFig");
+  if (figBox) {
+    if (preg.figura) {
+      figBox.innerHTML = `<img src="/figura?doc=${encodeURIComponent(DOC)}&img=${encodeURIComponent(preg.figura)}" alt="figura de pregunta">`;
+      figBox.hidden = false;
+    } else {
+      figBox.hidden = true;
+      figBox.innerHTML = "";
+    }
+  }
+  
+  const elEnunciado = $("quizPreguntaEnunciado");
+  if (elEnunciado) render(elEnunciado, preg.enunciado);
+  
+  const respArea = $("quizPreguntaRespuestas");
+  if (respArea) {
+    respArea.innerHTML = "";
+    
+    if (preg.tipo === "mc") {
+      preg.opciones.forEach((op, idx) => {
+        const label = document.createElement("label");
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "quizOp";
+        radio.value = idx;
+        radio.checked = QUIZ_RESPUESTAS[preg.id] === idx;
+        
+        radio.addEventListener("change", () => {
+          QUIZ_RESPUESTAS[preg.id] = idx;
+          actualizarBotonesNavegacion();
+        });
+        
+        label.appendChild(radio);
+        const span = document.createElement("span");
+        render(span, op);
+        label.appendChild(span);
+        respArea.appendChild(label);
+      });
+    } else if (preg.tipo === "vf") {
+      const vfDiv = document.createElement("div");
+      vfDiv.className = "quiz-vf-botones";
+      
+      const btnV = document.createElement("button");
+      btnV.type = "button";
+      btnV.className = "quiz-vf-btn" + (QUIZ_RESPUESTAS[preg.id] === true ? " seleccionado" : "");
+      btnV.textContent = "Verdadero";
+      
+      const btnF = document.createElement("button");
+      btnF.type = "button";
+      btnF.className = "quiz-vf-btn" + (QUIZ_RESPUESTAS[preg.id] === false ? " seleccionado" : "");
+      btnF.textContent = "Falso";
+      
+      btnV.onclick = () => {
+        QUIZ_RESPUESTAS[preg.id] = true;
+        btnV.className = "quiz-vf-btn seleccionado";
+        btnF.className = "quiz-vf-btn";
+        actualizarBotonesNavegacion();
+      };
+      
+      btnF.onclick = () => {
+        QUIZ_RESPUESTAS[preg.id] = false;
+        btnF.className = "quiz-vf-btn seleccionado";
+        btnV.className = "quiz-vf-btn";
+        actualizarBotonesNavegacion();
+      };
+      
+      vfDiv.appendChild(btnV);
+      vfDiv.appendChild(btnF);
+      respArea.appendChild(vfDiv);
+    } else if (preg.tipo === "desarrollo") {
+      const desDiv = document.createElement("div");
+      desDiv.className = "quiz-desarrollo-area";
+      const txt = document.createElement("textarea");
+      txt.placeholder = "Escribe tu respuesta aquí basándote en el documento...";
+      txt.value = QUIZ_RESPUESTAS[preg.id] || "";
+      
+      txt.addEventListener("input", () => {
+        QUIZ_RESPUESTAS[preg.id] = txt.value;
+        actualizarBotonesNavegacion();
+      });
+      
+      desDiv.appendChild(txt);
+      respArea.appendChild(desDiv);
+    }
+  }
+  
+  const feedbackBox = $("quizPreguntaFeedback");
+  if (feedbackBox) {
+    feedbackBox.hidden = true;
+  }
+  
+  actualizarBotonesNavegacion();
+}
+
+function actualizarBotonesNavegacion() {
+  const preg = QUIZ_PREGUNTAS[QUIZ_INDICE];
+  if (!preg) return;
+  
+  const btnAnt = $("btnQuizAnt");
+  if (btnAnt) btnAnt.disabled = QUIZ_INDICE === 0;
+  
+  const btnSig = $("quizPreguntas")?.querySelector("#btnQuizSig") || $("btnQuizSig");
+  if (btnSig) {
+    const esUltima = QUIZ_INDICE === QUIZ_PREGUNTAS.length - 1;
+    if (esUltima) {
+      btnSig.textContent = "Finalizar";
+      btnSig.style.background = "var(--meta)";
+      btnSig.style.color = "#fff";
+    } else {
+      btnSig.textContent = "Siguiente ▶";
+      btnSig.style.background = "";
+      btnSig.style.color = "";
+    }
+  }
+}
+
+async function finalizarYCalificarQuiz() {
+  const sinResponder = QUIZ_PREGUNTAS.filter(p => QUIZ_RESPUESTAS[p.id] === undefined || (typeof QUIZ_RESPUESTAS[p.id] === 'string' && QUIZ_RESPUESTAS[p.id].trim() === ""));
+  if (sinResponder.length > 0) {
+    if (!confirm(`Tienes ${sinResponder.length} pregunta(s) sin responder. ¿Quieres terminar la evaluación de todas formas?`)) {
+      return;
+    }
+  }
+  
+  const qPreg = $("quizPreguntas");
+  const qCarga = $("quizCarga");
+  if (qPreg) qPreg.hidden = true;
+  if (qCarga) {
+    const elCargandoTxt = qCarga.querySelector(".escribiendo");
+    if (elCargandoTxt) elCargandoTxt.textContent = "Calificando respuestas de desarrollo...";
+    qCarga.hidden = false;
+  }
+  
+  const desPreguntas = QUIZ_PREGUNTAS.filter(p => p.tipo === "desarrollo");
+  const promesas = desPreguntas.map(async (preg) => {
+    const ans = QUIZ_RESPUESTAS[preg.id] || "";
+    try {
+      const { provider, model } = motorQuiz();
+
+      const r = await fetch("/quiz/calificar", {
+        method: "POST",
+        headers: { ...HDRS, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enunciado: preg.enunciado,
+          puntos_clave: preg.puntos_clave,
+          respuesta_modelo: preg.respuesta_modelo,
+          respuesta_usuario: ans,
+          provider,
+          model
+        })
+      });
+      if (r.ok) {
+        QUIZ_FEEDBACKS[preg.id] = await r.json();
+      }
+    } catch (e) {
+      QUIZ_FEEDBACKS[preg.id] = {
+        puntaje: 0,
+        veredicto: "incorrecto",
+        aciertos: [],
+        faltantes: ["Error al calificar."],
+        feedback: "Error de comunicación con el LLM.",
+        respuesta_modelo: preg.respuesta_modelo
+      };
+    }
+  });
+  
+  await Promise.all(promesas);
+  
+  if (qCarga) {
+    qCarga.hidden = true;
+    const elCargandoTxt = qCarga.querySelector(".escribiendo");
+    if (elCargandoTxt) elCargandoTxt.textContent = "Generando preguntas basadas en el contexto";
+  }
+  
+  mostrarInformeFinal();
+}
+
+function mostrarInformeFinal() {
+  const qPreg = $("quizPreguntas");
+  const qRes = $("quizResultados");
+  if (qPreg) qPreg.hidden = true;
+  if (qRes) qRes.hidden = false;
+  
+  let aciertosMcVf = 0;
+  let totalMcVf = 0;
+  let sumaDes = 0;
+  let totalDes = 0;
+  
+  const resultadosPorSeccion = {};
+  
+  QUIZ_PREGUNTAS.forEach(p => {
+    const userAns = QUIZ_RESPUESTAS[p.id];
+    const sec = p.seccion || "General / Abstract";
+    if (!resultadosPorSeccion[sec]) resultadosPorSeccion[sec] = [];
+    
+    let esCorrecta = false;
+    let puntaje = 0;
+    
+    if (p.tipo === "mc" || p.tipo === "vf") {
+      totalMcVf++;
+      esCorrecta = userAns === p.correcta;
+      if (esCorrecta) {
+        aciertosMcVf++;
+        puntaje = 100;
+      } else {
+        puntaje = 0;
+      }
+    } else if (p.tipo === "desarrollo") {
+      totalDes++;
+      const feedback = QUIZ_FEEDBACKS[p.id] || { puntaje: 0 };
+      sumaDes += feedback.puntaje;
+      puntaje = feedback.puntaje;
+      esCorrecta = feedback.puntaje >= 70;
+    }
+    
+    resultadosPorSeccion[sec].push({
+      preg: p,
+      userAns,
+      esCorrecta,
+      puntaje
+    });
+  });
+  
+  let puntajeFinal = 0;
+  const nTotal = QUIZ_PREGUNTAS.length;
+  if (nTotal > 0) {
+    // Cada MC/VF correcta vale 100; cada desarrollo aporta su puntaje (0-100).
+    const sumaMcVf = aciertosMcVf * 100;
+    puntajeFinal = Math.round((sumaMcVf + sumaDes) / nTotal);
+  }
+  
+  const elScore = $("quizResultadoScore");
+  if (elScore) elScore.textContent = puntajeFinal + " / 100";
+  
+  const elDetalle = $("quizResultadoDetalle");
+  if (elDetalle) {
+    elDetalle.innerHTML = `
+      <p>Has completado la evaluación.</p>
+      <ul>
+        <li>Opción múltiple y V/F: <strong>${aciertosMcVf} de ${totalMcVf} correctas</strong>.</li>
+        <li>Preguntas de desarrollo: <strong>${totalDes > 0 ? Math.round(sumaDes / totalDes) : 0}/100</strong> de promedio.</li>
+      </ul>
+    `;
+  }
+  
+  const debilidadesCont = $("quizResultadoDebilidades");
+  if (debilidadesCont) {
+    debilidadesCont.innerHTML = "";
+    
+    for (const [sec, lista] of Object.entries(resultadosPorSeccion)) {
+      const secDiv = document.createElement("div");
+      secDiv.className = "quiz-resultado-seccion-bloque";
+      secDiv.style.marginBottom = "1.2rem";
+      
+      const secTitle = document.createElement("div");
+      secTitle.className = "sec-lbl";
+      secTitle.style.cssText = "font-family:var(--f-mono);font-size:0.7rem;font-weight:700;color:var(--neat);margin-bottom:0.5rem;border-bottom:1px solid var(--neat);padding-bottom:0.2rem";
+      secTitle.textContent = `SECCIÓN: ${sec.toUpperCase()}`;
+      secDiv.appendChild(secTitle);
+      
+      lista.forEach(item => {
+        const p = item.preg;
+        const det = document.createElement("details");
+        det.className = "quiz-details-resultado";
+        det.style.cssText = "border:1px solid var(--neat);border-radius:4px;margin-bottom:0.5rem;background:var(--sheet);overflow:hidden";
+        
+        const sum = document.createElement("summary");
+        sum.style.cssText = "padding:0.5rem 0.8rem;cursor:pointer;user-select:none;display:flex;align-items:center;gap:0.6rem;font-weight:500;font-size:0.88rem";
+        
+        const badge = document.createElement("span");
+        badge.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font-size:0.68rem;font-weight:700;color:#fff;background:${item.esCorrecta ? 'var(--meta)' : 'var(--intrusivo)'}`;
+        badge.textContent = item.esCorrecta ? "✓" : "✕";
+        
+        const tipoLabel = document.createElement("span");
+        tipoLabel.style.cssText = "font-size:0.68rem;font-family:var(--f-mono);color:var(--ink-2);background:var(--sheet-2);padding:0.1rem 0.35rem;border-radius:3px";
+        const tipoTxt = p.tipo === "mc" ? "Opción Múltiple" : (p.tipo === "vf" ? "V/F" : "Desarrollo");
+        tipoLabel.textContent = tipoTxt;
+        
+        const titleTxt = document.createElement("span");
+        titleTxt.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px";
+        titleTxt.textContent = p.enunciado;
+        
+        sum.appendChild(badge);
+        sum.appendChild(tipoLabel);
+        sum.appendChild(titleTxt);
+        det.appendChild(sum);
+        
+        const cuerpo = document.createElement("div");
+        cuerpo.style.cssText = "padding:0.8rem 1rem;border-top:1px solid var(--neat);font-size:0.88rem;line-height:1.45;display:flex;flex-direction:column;gap:0.6rem";
+        
+        const elEnun = document.createElement("div");
+        elEnun.style.fontWeight = "600";
+        elEnun.innerHTML = `<strong>Pregunta:</strong> `;
+        const elEnunTxt = document.createElement("span");
+        render(elEnunTxt, p.enunciado);
+        elEnun.appendChild(elEnunTxt);
+        cuerpo.appendChild(elEnun);
+        
+        if (p.figura) {
+          const elFig = document.createElement("div");
+          elFig.style.cssText = "margin:0.4rem 0;text-align:center";
+          elFig.innerHTML = `<img src="/figura?doc=${encodeURIComponent(DOC)}&img=${encodeURIComponent(p.figura)}" style="max-height:160px;max-width:100%;border-radius:4px" alt="figura">`;
+          cuerpo.appendChild(elFig);
+        }
+        
+        const elResp = document.createElement("div");
+        elResp.style.cssText = "background:var(--sheet-2);padding:0.6rem 0.8rem;border-radius:4px;border-left:3px solid " + (item.esCorrecta ? "var(--meta)" : "var(--intrusivo)");
+        
+        if (p.tipo === "mc") {
+          const uTxt = item.userAns !== undefined ? p.opciones[item.userAns] : "(Sin responder)";
+          const cTxt = p.opciones[p.correcta];
+          elResp.innerHTML = `
+            <div><strong>Tu Respuesta:</strong> ${esc(uTxt)}</div>
+            <div style="margin-top:0.25rem"><strong>Respuesta Correcta:</strong> ${esc(cTxt)}</div>
+          `;
+        } else if (p.tipo === "vf") {
+          const uTxt = item.userAns !== undefined ? (item.userAns ? "Verdadero" : "Falso") : "(Sin responder)";
+          const cTxt = p.correcta ? "Verdadero" : "Falso";
+          elResp.innerHTML = `
+            <div><strong>Tu Respuesta:</strong> ${esc(uTxt)}</div>
+            <div style="margin-top:0.25rem"><strong>Respuesta Correcta:</strong> ${esc(cTxt)}</div>
+          `;
+        } else if (p.tipo === "desarrollo") {
+          const feedback = QUIZ_FEEDBACKS[p.id] || { puntaje: 0, feedback: "Sin calificar", respuesta_modelo: p.respuesta_modelo, veredicto: "incorrecto" };
+          elResp.innerHTML = `
+            <div><strong>Tu Respuesta:</strong> <div style="font-style:italic;margin-top:0.15rem">${esc(item.userAns || "(Sin responder)")}</div></div>
+            <div style="margin-top:0.5rem"><strong>Rúbrica/Respuesta Modelo:</strong> <div class="modelo-txt" style="font-style:italic;margin-top:0.15rem"></div></div>
+          `;
+          const mTxtEl = elResp.querySelector(".modelo-txt");
+          if (mTxtEl) render(mTxtEl, feedback.respuesta_modelo || p.respuesta_modelo);
+        }
+        cuerpo.appendChild(elResp);
+        
+        const elFeedback = document.createElement("div");
+        elFeedback.className = "quiz-feedback-detalle";
+        elFeedback.style.cssText = "border:1px dashed var(--neat);padding:0.6rem 0.8rem;border-radius:4px;font-size:0.84rem";
+        
+        if (p.tipo === "mc" || p.tipo === "vf") {
+          elFeedback.innerHTML = `
+            <div style="font-weight:700;color:var(--meta);margin-bottom:0.25rem">Explicación del Tutor:</div>
+            <div class="exp-txt"></div>
+            <div style="margin-top:0.4rem;color:var(--neat);font-size:0.74rem"><strong>Cita:</strong> ${esc(p.cita || "No especificada")}</div>
+          `;
+          const expTxtEl = elFeedback.querySelector(".exp-txt");
+          if (expTxtEl) render(expTxtEl, p.explicacion);
+        } else if (p.tipo === "desarrollo") {
+          const feedback = QUIZ_FEEDBACKS[p.id] || { puntaje: 0, feedback: "Error de comunicación", aciertos: [], faltantes: [] };
+          elFeedback.innerHTML = `
+            <div style="font-weight:700;color:var(--meta);margin-bottom:0.25rem">Calificación del Tutor: ${feedback.puntaje}/100 (${feedback.veredicto})</div>
+            <div class="feed-txt"></div>
+            <div style="margin-top:0.4rem"><strong>Aciertos detectados:</strong> <ul style="margin:0.2rem 0;padding-left:1.2rem">${(feedback.aciertos || []).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>
+            <div style="margin-top:0.4rem"><strong>Puntos faltantes:</strong> <ul style="margin:0.2rem 0;padding-left:1.2rem">${(feedback.faltantes || []).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>
+            <div style="margin-top:0.4rem;color:var(--neat);font-size:0.74rem"><strong>Cita:</strong> ${esc(p.cita || "No especificada")}</div>
+          `;
+          const feedTxtEl = elFeedback.querySelector(".feed-txt");
+          if (feedTxtEl) render(feedTxtEl, feedback.feedback);
+        }
+        cuerpo.appendChild(elFeedback);
+        
+        const elAnkiDiv = document.createElement("div");
+        elAnkiDiv.style.textAlign = "right";
+        const btnAnki = document.createElement("button");
+        btnAnki.type = "button";
+        btnAnki.className = "mini";
+        btnAnki.textContent = "🃏 Exportar a Anki";
+        btnAnki.onclick = () => exportarPreguntaQuizAAnki(p.id);
+        elAnkiDiv.appendChild(btnAnki);
+        cuerpo.appendChild(elAnkiDiv);
+        
+        det.appendChild(cuerpo);
+        secDiv.appendChild(det);
+      });
+      
+      debilidadesCont.appendChild(secDiv);
+    }
+  }
+}
+
+function exportarPreguntaQuizAAnki(pregId) {
+  const preg = QUIZ_PREGUNTAS.find(p => p.id === pregId);
+  if (!preg) return;
+  
+  const userAns = QUIZ_RESPUESTAS[preg.id];
+  let textoAnki = `Pregunta: ${preg.enunciado}\n\n`;
+  
+  if (preg.tipo === "mc") {
+    textoAnki += `Opciones:\n` + preg.opciones.map((op, i) => `${i === preg.correcta ? '->' : '  '} ${op}`).join('\n') + `\n\n`;
+    textoAnki += `Explicación: ${preg.explicacion}\nCita: ${preg.cita}`;
+  } else if (preg.tipo === "vf") {
+    textoAnki += `Respuesta Correcta: ${preg.correcta ? 'Verdadero' : 'Falso'}\n\n`;
+    textoAnki += `Explicación: ${preg.explicacion}\nCita: ${preg.cita}`;
+  } else if (preg.tipo === "desarrollo") {
+    const feedback = QUIZ_FEEDBACKS[preg.id] || { feedback: "", respuesta_modelo: preg.respuesta_modelo };
+    textoAnki += `Tu Respuesta: ${userAns || "(sin responder)"}\n\n`;
+    textoAnki += `Respuesta Modelo: ${feedback.respuesta_modelo || preg.respuesta_modelo}\n\n`;
+    textoAnki += `Feedback Tutor: ${feedback.feedback}\nCita: ${preg.cita}`;
+  }
+  
+  generarAnki(textoAnki, `Quiz ${preg.tipo.toUpperCase()}: ${limpiaTit(preg.seccion || DOC)}`);
+}
+window.exportarPreguntaQuizAAnki = exportarPreguntaQuizAAnki;
+
+function exportarTodasFalladasAAnki() {
+  const falladas = QUIZ_PREGUNTAS.filter(p => {
+    const userAns = QUIZ_RESPUESTAS[p.id];
+    if (p.tipo === "mc" || p.tipo === "vf") {
+      return userAns !== p.correcta;
+    } else {
+      const feedback = QUIZ_FEEDBACKS[p.id] || { puntaje: 0 };
+      return feedback.puntaje < 70;
+    }
+  });
+  
+  if (falladas.length === 0) {
+    alert("No tienes preguntas falladas.");
+    return;
+  }
+  
+  let textoConsolidado = `Preguntas falladas en RAG Quiz de ${DOC}:\n\n`;
+  falladas.forEach((preg, idx) => {
+    textoConsolidado += `--- PREGUNTA ${idx + 1} (${preg.tipo.toUpperCase()}) ---\n`;
+    textoConsolidado += `Enunciado: ${preg.enunciado}\n`;
+    if (preg.tipo === "mc") {
+      textoConsolidado += `Opciones:\n` + preg.opciones.map((o, i) => `${i === preg.correcta ? '[X]' : '[ ]'} ${o}`).join('\n') + `\n`;
+      textoConsolidado += `Explicación: ${preg.explicacion}\n`;
+    } else if (preg.tipo === "vf") {
+      textoConsolidado += `Respuesta Correcta: ${preg.correcta ? 'Verdadero' : 'Falso'}\n`;
+      textoConsolidado += `Explicación: ${preg.explicacion}\n`;
+    } else {
+      const f = QUIZ_FEEDBACKS[preg.id] || { feedback: "", respuesta_modelo: preg.respuesta_modelo };
+      textoConsolidado += `Respuesta Modelo: ${f.respuesta_modelo || preg.respuesta_modelo}\n`;
+      textoConsolidado += `Feedback Tutor: ${f.feedback}\n`;
+    }
+    textoConsolidado += `Cita: ${preg.cita}\n\n`;
+  });
+  
+  generarAnki(textoConsolidado, `Preguntas falladas: ${DOC}`);
+}
+
+$("btnAnkiTodasFalladas")?.addEventListener("click", exportarTodasFalladasAAnki);
+$("btnQuizReiniciar")?.addEventListener("click", volverConfigQuiz);
+
+$("tabConsulta")?.addEventListener("click", () => activarTab("consulta"));
+$("tabQuiz")?.addEventListener("click", () => activarTab("quiz"));
+$("btnIniciarQuiz")?.addEventListener("click", iniciarQuiz);
+$("btnQuizAnt")?.addEventListener("click", () => {
+  if (QUIZ_INDICE > 0) {
+    QUIZ_INDICE--;
+    pintarPreguntaActual();
+  }
+});
+$("btnQuizSig")?.addEventListener("click", () => {
+  const esUltima = QUIZ_INDICE === QUIZ_PREGUNTAS.length - 1;
+  if (esUltima) {
+    finalizarYCalificarQuiz();
+  } else {
+    QUIZ_INDICE++;
+    pintarPreguntaActual();
+  }
+});
+
+$("quizFullscreen")?.addEventListener("click", () => {
+  const panel = $("panelQuiz");
+  if (!panel) return;
+  panel.classList.toggle("fullscreen");
+  const btn = $("quizFullscreen");
+  if (!btn) return;
+  if (panel.classList.contains("fullscreen")) {
+    btn.textContent = "⤝⤞";
+    btn.title = "Salir de pantalla completa";
+  } else {
+    btn.textContent = "⤢";
+    btn.title = "Pantalla completa";
+  }
+});
+
+function restaurarConfigQuiz() {
+  const n_mc = localStorage.getItem("testigo-quiz-n_mc");
+  if (n_mc !== null && $("quizNMc")) $("quizNMc").value = n_mc;
+  const n_vf = localStorage.getItem("testigo-quiz-n_vf");
+  if (n_vf !== null && $("quizNVf")) $("quizNVf").value = n_vf;
+  const n_des = localStorage.getItem("testigo-quiz-n_des");
+  if (n_des !== null && $("quizNDes")) $("quizNDes").value = n_des;
+  const dif = localStorage.getItem("testigo-quiz-dificultad");
+  if (dif !== null && $("quizDificultad")) $("quizDificultad").value = dif;
+  if (localStorage.getItem("testigo-panel-tab") === "quiz") activarTab("quiz");
+}
+
+/* ── Panel de configuración · Wizard · Onboarding ── */
+const CFG_KEYS = [
+  {k:"GEMINI_API_KEY", nombre:"Google Gemini", costo:"GRATIS", costoTipo:"free",
+   desc:"embeddings + chat; consíguela en Google AI Studio", prov:"gemini"},
+  {k:"DEEPSEEK_API_KEY", nombre:"DeepSeek", costo:"DE PAGO, barato", costoTipo:"paid",
+   desc:"chat con razonamiento", prov:"deepseek"},
+  {k:"OLLAMA_API_KEY", nombre:"Ollama Cloud", costo:"GRATIS con límite", costoTipo:"free",
+   desc:"chat", prov:"ollama"},
+  {k:"AWS_BEARER_TOKEN_BEDROCK", nombre:"AWS Bedrock", costo:"DE PAGO", costoTipo:"paid",
+   desc:"solo para describir figuras al ingerir PDFs; existen alternativas: VISION_PROVIDER=gemini o manual",
+   prov:"bedrock"}
+];
+let CFG_WIZARD = false;
+
+function cfgMsg(txt, clase){ const e=$("cfgMsg"); e.textContent=txt||""; e.className="cfg-msg"+(clase?(" "+clase):""); }
+
+/* Construye las filas de claves API y llena el perfil desde /config */
+function pintarConfig(d){
+  const cont=$("cfgKeys"); cont.innerHTML="";
+  const keys=d.keys||{};
+  CFG_KEYS.forEach(meta=>{
+    const est = keys[meta.k] || {definida:false, mascara:""};
+    const fila=document.createElement("div"); fila.className="cfg-key"; fila.dataset.k=meta.k;
+    const esBedrock = meta.k==="AWS_BEARER_TOKEN_BEDROCK";
+    const reg = esBedrock ? (keys.AWS_REGION||{definida:false, mascara:""}) : null;
+    fila.innerHTML =
+      `<div class="cfg-key-cab">`+
+        `<span class="cfg-key-nom">${meta.nombre}</span>`+
+        `<span class="cfg-tag cfg-tag--${meta.costoTipo}">${meta.costo}</span>`+
+        `<span class="cfg-key-estado${est.definida?' def':''}">`+
+          (est.definida ? '● '+esc(est.mascara) : 'sin configurar')+`</span>`+
+      `</div>`+
+      `<div class="cfg-key-desc">${esc(meta.desc)}</div>`+
+      `<div class="cfg-key-fila">`+
+        `<input type="password" class="cfg-input" autocomplete="off" `+
+          `placeholder="${est.definida?'escribe una nueva para reemplazar…':'pega tu clave…'}">`+
+        (esBedrock ? `<input type="text" class="cfg-region" autocomplete="off" title="AWS_REGION" `+
+          `placeholder="${reg.definida?'región (configurada)':'región, ej. us-east-1'}">` : ``)+
+        `<button type="button" class="mini cfg-probar">Probar</button>`+
+        `<span class="cfg-probar-res"></span>`+
+      `</div>`;
+    fila.querySelector(".cfg-probar").addEventListener("click", ev=>
+      probarProveedor(meta.prov, fila.querySelector(".cfg-probar-res"), ev.currentTarget));
+    cont.appendChild(fila);
+  });
+  const p=d.perfil||{};
+  $("cfgNombre").value=p.nombre||""; $("cfgRol").value=p.rol||"";
+  $("cfgDisciplina").value=p.disciplina||"";
+  $("cfgNivel").value=p.nivel||"intermedio"; $("cfgObjetivo").value=p.objetivo||"";
+  $("cfgInstrucciones").value=p.instrucciones||"";
+  // Los describers solo distinguen "gemini" y "manual"; cualquier otro valor cae a bedrock.
+  const vp=(d.vision_provider||"").toLowerCase();
+  $("cfgVision").value=(vp==="gemini"||vp==="manual")?vp:"bedrock";
+  $("cfgTokenAviso").hidden = d.rag_token_definido !== false;
+  // en modo wizard, resaltar la fila de Gemini
+  cont.querySelectorAll(".cfg-key").forEach(f=>
+    f.classList.toggle("destacada", CFG_WIZARD && f.dataset.k==="GEMINI_API_KEY"));
+}
+
+async function cargarConfig(){
+  const d = await (await fetch("/config",{headers:HDRS})).json();
+  pintarConfig(d);
+  return d;
+}
+
+async function abrirConfig(wizard){
+  CFG_WIZARD = !!wizard;
+  cfgMsg("");
+  $("cfgBienvenida").hidden = !wizard;
+  $("cfgSubtitulo").textContent = wizard ? "Bienvenido — configura tu primera clave" : "Tu perfil de estudio y claves API";
+  $("modalConfig").hidden=false;
+  try{ await cargarConfig(); }
+  catch{ cfgMsg("No se pudo cargar la configuración.", "err"); }
+}
+function cerrarConfig(){ $("modalConfig").hidden=true; }
+
+async function probarProveedor(prov, resEl, btn){
+  btn.disabled=true; resEl.className="cfg-probar-res"; resEl.textContent="probando…";
+  try{
+    const r=await fetch("/config/probar",{method:"POST",
+      headers:{...HDRS,"Content-Type":"application/json"}, body:JSON.stringify({proveedor:prov})});
+    const d=await r.json();
+    resEl.className="cfg-probar-res "+(d.ok?"ok":"err");
+    resEl.textContent=(d.ok?"✓ ":"✗ ")+(d.detail||(d.ok?"OK":"falló"));
+  }catch{ resEl.className="cfg-probar-res err"; resEl.textContent="✗ error de red"; }
+  finally{ btn.disabled=false; }
+}
+
+async function guardarConfigPanel(){
+  const keys={};
+  $("cfgKeys").querySelectorAll(".cfg-key").forEach(fila=>{
+    const inp=fila.querySelector(".cfg-input");
+    if(inp && inp.value.trim()) keys[fila.dataset.k]=inp.value.trim();
+    const reg=fila.querySelector(".cfg-region");
+    if(reg && reg.value.trim()) keys.AWS_REGION=reg.value.trim();
+  });
+  const perfil={
+    nombre:$("cfgNombre").value.trim(), rol:$("cfgRol").value.trim(),
+    disciplina:$("cfgDisciplina").value.trim(),
+    nivel:$("cfgNivel").value, objetivo:$("cfgObjetivo").value.trim(),
+    instrucciones:$("cfgInstrucciones").value.trim()
+  };
+  const vision_provider=$("cfgVision").value;
+  const btn=$("cfgGuardar"); btn.disabled=true; cfgMsg("guardando…");
+  try{
+    const r=await fetch("/config",{method:"POST",
+      headers:{...HDRS,"Content-Type":"application/json"}, body:JSON.stringify({keys, perfil, vision_provider})});
+    if(!r.ok){ let m=""; try{ m=(await r.json()).detail||""; }catch{} throw new Error(m||("HTTP "+r.status)); }
+    const d=await r.json();
+    if(d.reload){ cfgMsg("guardado · recargando…", "ok"); location.reload(); return; }
+    cfgMsg("✓ cambios guardados", "ok");
+    CFG_WIZARD = !!d.setup_required;
+    $("cfgBienvenida").hidden = !d.setup_required;
+    await cargarConfig();            // refresca máscaras y limpia inputs
+    await cargarProveedores();       // por si se habilitó un proveedor nuevo
+    // refresca banner/onboarding tras el cambio
+    try{ const h=await (await fetch("/health")).json();
+      aplicarMismatch(h.embed_mismatch||""); }catch{}
+  }catch(err){ cfgMsg("✗ "+err.message, "err"); }
+  finally{ btn.disabled=false; }
+}
+
+async function generarTokenSeguridad(){
+  if(!confirm("Se generará un token de seguridad y la página se recargará. ¿Continuar?")) return;
+  try{
+    const r=await fetch("/config",{method:"POST",
+      headers:{...HDRS,"Content-Type":"application/json"}, body:JSON.stringify({generar_token:true})});
+    const d=await r.json();
+    if(d.reload) location.reload();
+    else cfgMsg("Token generado.", "ok");
+  }catch{ cfgMsg("No se pudo generar el token.", "err"); }
+}
+
+function aplicarMismatch(txt){
+  const b=$("bannerMismatch");
+  if(txt){ b.textContent="⚠ "+txt; b.hidden=false; } else { b.textContent=""; b.hidden=true; }
+}
+
+function mostrarOnboarding(){
+  const hilo=$("hilo");
+  hilo.innerHTML =
+    `<article class="onboarding">`+
+      `<h4>Tu biblioteca está vacía</h4>`+
+      `<p>Aún no hay documentos indexados. Para empezar a estudiar con GaIA:</p>`+
+      `<ol>`+
+        `<li>Copia un PDF a la carpeta <code>raw/</code> del proyecto.</li>`+
+        `<li>En una terminal, corre <code>python ingesta.py "nombre.pdf"</code>.</li>`+
+        `<li>Cuando la ingesta se pause, revisa el plan de figuras con `+
+          `<code>python revisar_figuras.py "&lt;nombre&gt;"</code>.</li>`+
+        `<li>Re-corre la ingesta y recarga esta página.</li>`+
+      `</ol>`+
+      `<div class="ob-hint">El pipeline es reanudable: si algo falla, vuelve a correr el mismo comando.</div>`+
+    `</article>`;
+}
+
+async function initConfigUX(){
+  let h;
+  try{ h = await (await fetch("/health")).json(); }catch{ return; }
+  aplicarMismatch(h.embed_mismatch||"");
+  if(h.setup_required){ abrirConfig(true); }
+  else if(h.corpus_vacio){ mostrarOnboarding(); }
+}
+
+$("btnConfig").addEventListener("click", ()=>abrirConfig(false));
+$("cfgCerrar").addEventListener("click", cerrarConfig);
+$("modalConfig").addEventListener("click", e=>{ if(e.target.id==="modalConfig") cerrarConfig(); });
+$("cfgGuardar").addEventListener("click", guardarConfigPanel);
+$("cfgGenToken").addEventListener("click", generarTokenSeguridad);
+
+salud(); cargarDocs(); cargarProveedores(); cargarLibretas(); restaurarConfigQuiz(); initConfigUX(); setInterval(salud, 30000);
+
+</script>
+</body>
+</html>
