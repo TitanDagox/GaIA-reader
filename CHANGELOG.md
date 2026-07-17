@@ -6,6 +6,40 @@ se etiquetará `v1.0` cuando el repositorio se haga público. Lo más reciente v
 > Convención: cada cambio hecho se anota aquí en una línea. El *porqué* y el diseño vivo están en
 > `CONTEXTO.md`; el detalle técnico y los bugs resueltos, en `NOTAS_TECNICAS.md`.
 
+## 2026-07-17
+
+### Chat — investigación agéntica (tool-use)
+- **Modo "Investigación profunda" (toggle 🔬 en la UI, off por defecto)**: el modelo indaga la
+  biblioteca con herramientas ANTES de responder, para comparaciones precisas entre papers y
+  preguntas multi-salto. Diseño en 2 fases: FASE A = bucle de tool-use SIN streaming (esquiva los
+  bugs de streaming+tool_calls de Gemini/Gemma); FASE B = respuesta final por los `_chat_*` de
+  siempre, con la evidencia recolectada como contexto. 3 herramientas: `buscar_en_corpus`,
+  `ver_esquema`, `leer_seccion` (reutilizan `buscar`/`outlines`/`_texto_seccion`). Fallback al RAG
+  de un tiro si la Fase A falla → nunca peor que antes. `agentic_capaz` por motor derivado de
+  `AGENT_ADAPTERS`. El evento `done` trae `trazas` (herramientas que llamó el modelo).
+- **Evaluación de calidad y gating (cuaderno GSI, misma pregunta a los inciertos)**: DeepSeek V4 Pro
+  (22 tool-calls) y **V4 Flash (19 calls, 64 s, la respuesta más completa/precisa —leyó bien hasta los
+  coeficientes AHP de Li 2026)**, y Gemini 3.5 Flash (5 calls, completa y correcta en lo grande, pero
+  menos fiable en cifras finas) rinden bien → **botón habilitado**. Gemma 4 hizo UNA sola llamada (degeneró a RAG de un tiro), fue el
+  más lento (116 s) y mezcló métodos → **botón desactivado** para Gemma (su adaptador queda listo por si
+  mejora). Sonnet/Bedrock pendiente (el confiable; no se evaluó). Adaptadores: DeepSeek (OpenAI),
+  Gemini (`generateContent`, `functionResponse` role=function), Gemma (Ollama `/api/chat` nativo).
+- **Progreso en vivo de la Fase A**: la investigación ya no es a ciegas. La Fase A corre DENTRO del
+  stream y emite eventos `{"status":…}` legibles ("🔎 Buscando…", "🗂 Revisando el índice de…",
+  "📖 Leyendo «sección» de (Autor año)", "✍️ Redactando…") + un aviso inicial (más enfático en Gemini,
+  que tarda más). La UI los pinta en un panel colapsable "Investigando…" (reutiliza el estilo del panel
+  de pensamiento) que al terminar se reetiqueta a "Investigación" y se colapsa. Los adaptadores pasaron
+  a ser generadores (`yield` del paso, `return` de la evidencia).
+
+### Ingesta — figuras
+- **Menciones distantes en la descripción de figuras**: `describir_figuras.py` ahora recolecta las
+  oraciones de TODO el paper que citan cada figura por número ("…como muestra la Fig. 6…", a menudo
+  lejos del pie, en Discusión/Resultados donde el autor dice qué concluir) y las pasa a Sonnet como
+  bloque `=== MENCIONES EN EL TEXTO ===`, junto al pie y el contexto local. Regla simple (regex +
+  segmentación por oración con el punto de "Fig." protegido), sin nueva capa de IA. No confunde
+  "Fig. 6" con "Fig. 60". Para que una figura ya cacheada se beneficie hay que borrar su `.md` en
+  `descripciones/_cache_<doc>/` y re-describir.
+
 ## 2026-07-11
 
 ### Documentación

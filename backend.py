@@ -470,6 +470,8 @@ class AskReq(BaseModel):
     historial: list | None = None     # turnos previos [{q, a}] para dar memoria conversacional
     imagenes_usuario: list | None = None  # capturas adjuntadas en el chat (dataURLs); p.ej.
                                           # una tabla del PDF cuando marker la extrajo mal
+    agentic: bool = False             # "Investigación profunda": el modelo indaga el corpus con
+                                      # herramientas antes de responder (Fase A). Off por defecto.
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -522,6 +524,10 @@ def _motores():
         motores.append({"provider": "bedrock", "model": BEDROCK_MODEL,
                         "label": "Claude Sonnet 4.6", "grupo": "Amazon Bedrock",
                         "vision": True, "thinking_capaz": False})
+    # "Investigación profunda" (Fase A): capaz si su proveedor tiene adaptador de tool-use.
+    # Derivado de AGENT_ADAPTERS → se auto-activa al sumar Sonnet/Gemini/Gemma (una sola fuente).
+    for m in motores:
+        m["agentic_capaz"] = m["provider"] in AGENT_ADAPTERS
     return motores
 
 
@@ -855,6 +861,269 @@ def _dataurl_a_jpeg_b64(dataurl: str):
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
+# ── Investigación agéntica (tool-use): el modelo indaga el corpus antes de responder ──
+# Diseño en 2 FASES (ver NOTAS_TECNICAS): FASE A = bucle de herramientas SIN streaming
+# (el modelo pide búsquedas/lecturas, las ejecutamos y le devolvemos los resultados; así
+# esquivamos los bugs de "streaming + tool_calls" de Gemini/Gemma). FASE B = la respuesta
+# final se transmite con los _chat_* de siempre, usando como CONTEXTO la evidencia
+# recolectada. Si la Fase A falla, ask() cae al RAG de un tiro. Off por defecto (toggle UI).
+AGENT_MAX_ROUNDS = 5          # tope de vueltas de herramientas (acota costo/latencia)
+AGENT_BUSCAR_K = 5            # resultados de texto por búsqueda dentro del bucle
+AGENT_SNIPPET = 900           # chars por resultado en el tool-result (leer_seccion da el resto)
+AGENT_SECCION_MAX = 6000      # chars máx que devuelve leer_seccion (acota tokens)
+
+
+def _scope_sources(doc=None, docs=None) -> list:
+    """Papers válidos para el alcance actual: un doc, un cuaderno, o TODO el corpus."""
+    if doc:
+        return [doc]
+    if docs:
+        return list(docs)
+    pts = qdrant.scroll(COLLECTION, limit=10000, with_payload=True)[0]
+    return sorted({(p.payload or {}).get("source", "") for p in pts} - {""})
+
+
+def _tool_buscar(consulta: str, documento: str, scope: list) -> str:
+    """buscar_en_corpus: recuperación semántica. `documento` acota a un paper (si está en el
+    alcance); vacío = todo el alcance."""
+    doc = documento if (documento and documento in scope) else None
+    docs = None if doc else scope
+    filas = buscar(consulta, top_k=AGENT_BUSCAR_K, fig_k=2, tab_k=1, doc=doc, docs=docs)
+    if not filas:
+        return "(sin resultados para esa consulta)"
+    out = []
+    for r in filas:
+        et = {"figure": "[FIGURA] ", "table": "[TABLA] "}.get(r["type"], "")
+        out.append(f"• {et}{r['source']} — {r['titulo']}\n{(r['texto'] or '')[:AGENT_SNIPPET]}")
+    return "\n\n".join(out)
+
+
+def _tool_ver_esquema(documento: str, scope: list) -> str:
+    """ver_esquema: TOC + resumen por sección (de outlines/), para navegar barato."""
+    if documento not in scope:
+        return f"'{documento}' no está en el alcance. Papers disponibles: {', '.join(scope)}"
+    p = OUTLINES_DIR / f"{documento}.jsonl"
+    if not p.exists():
+        return f"(sin esquema pre-computado para '{documento}')"
+    lineas = []
+    for ln in p.read_text(encoding="utf-8").splitlines():
+        d = json.loads(ln)
+        sangria = "  " * max(0, int(d.get("nivel", 1)) - 1)
+        res = re.sub(r"\s+", " ", d.get("resumen") or "").strip()
+        res = (": " + res[:180] + "…") if res else ""
+        lineas.append(f"{sangria}- {d.get('titulo', '')}{res}")
+    return "\n".join(lineas) or "(esquema vacío)"
+
+
+def _tool_leer_seccion(documento: str, titulo: str, scope: list) -> str:
+    """leer_seccion: cuerpo COMPLETO de una sección (no fragmentos)."""
+    if documento not in scope:
+        return f"'{documento}' no está en el alcance. Papers disponibles: {', '.join(scope)}"
+    try:
+        return _texto_seccion(documento, titulo)[:AGENT_SECCION_MAX]
+    except HTTPException as e:
+        return str(e.detail)
+
+
+# Herramientas expuestas al modelo (spec agnóstico; se traduce por proveedor en la Fase A).
+AGENT_TOOLS = [
+    {"name": "buscar_en_corpus",
+     "descripcion": "Búsqueda semántica en la biblioteca del usuario. Devuelve los fragmentos "
+                    "(texto, figuras, tablas) más afines. Úsala para localizar dónde se trata un "
+                    "tema. Acota a un paper con 'documento', o déjalo vacío para buscar en todos.",
+     "params": {"consulta": ("string", "Qué buscar, en lenguaje natural."),
+                "documento": ("string", "Opcional: nombre exacto del paper para acotar la búsqueda.")},
+     "requeridos": ["consulta"]},
+    {"name": "ver_esquema",
+     "descripcion": "Tabla de contenidos + resumen por sección de UN paper. Úsala para saber qué "
+                    "secciones tiene y elegir cuál leer entera, sin gastar de más.",
+     "params": {"documento": ("string", "Nombre exacto del paper.")},
+     "requeridos": ["documento"]},
+    {"name": "leer_seccion",
+     "descripcion": "Devuelve el texto COMPLETO de una sección de un paper (para leer un método o "
+                    "resultado de corrido, no en fragmentos). Usa antes ver_esquema para el título exacto.",
+     "params": {"documento": ("string", "Nombre exacto del paper."),
+                "titulo": ("string", "Título exacto de la sección (como aparece en ver_esquema).")},
+     "requeridos": ["documento", "titulo"]},
+]
+
+
+def _ejecutar_tool(nombre: str, args: dict, scope: list) -> str:
+    """Despacha una llamada de herramienta a su implementación. Nunca lanza: cualquier error
+    vuelve como texto para que el modelo lo lea y reintente (no rompe la Fase A)."""
+    try:
+        if nombre == "buscar_en_corpus":
+            return _tool_buscar(args.get("consulta", ""), args.get("documento", ""), scope)
+        if nombre == "ver_esquema":
+            return _tool_ver_esquema(args.get("documento", ""), scope)
+        if nombre == "leer_seccion":
+            return _tool_leer_seccion(args.get("documento", ""), args.get("titulo", ""), scope)
+        return f"(herramienta desconocida: {nombre})"
+    except Exception as e:
+        return f"(error ejecutando {nombre}: {e})"
+
+
+def _tools_openai() -> list:
+    """Traduce AGENT_TOOLS al formato de function-calling de OpenAI (DeepSeek, Gemma/Ollama)."""
+    out = []
+    for t in AGENT_TOOLS:
+        props = {k: {"type": ty, "description": desc} for k, (ty, desc) in t["params"].items()}
+        out.append({"type": "function", "function": {
+            "name": t["name"], "description": t["descripcion"],
+            "parameters": {"type": "object", "properties": props, "required": t["requeridos"]}}})
+    return out
+
+
+SYS_AGENTE = (
+    "Eres un investigador que, ANTES de responder, indaga la biblioteca del usuario con las "
+    "herramientas dadas. Descompón la pregunta, busca en los papers pertinentes (uno por uno si "
+    "hace falta comparar), abre esquemas y lee secciones completas cuando necesites detalle. "
+    "Para preguntas que abarcan varios papers, revisa CADA paper pertinente por separado. No "
+    "inventes: usa solo lo que las herramientas devuelven. Cuando tengas evidencia suficiente, "
+    "deja de llamar herramientas (no hace falta que redactes la respuesta final aquí)."
+)
+
+
+def _corto(doc: str) -> str:
+    """Nombre corto y legible de un paper para el progreso: el '(Autor año)' del final si existe."""
+    m = re.search(r"\(([^)]+)\)\s*$", doc or "")
+    return m.group(1) if m else (doc or "")[:40]
+
+
+def _paso_legible(fn: str, args: dict) -> str:
+    """Traza de herramienta → línea amigable para mostrar en vivo en la UI (Fase A)."""
+    if fn == "buscar_en_corpus":
+        cons = (args.get("consulta") or "")[:60]
+        doc = args.get("documento")
+        return f"🔎 Buscando «{cons}»" + (f" en {_corto(doc)}" if doc else " en todo el cuaderno")
+    if fn == "ver_esquema":
+        return f"🗂 Revisando el índice de {_corto(args.get('documento', ''))}"
+    if fn == "leer_seccion":
+        return (f"📖 Leyendo «{(args.get('titulo') or '')[:50]}» "
+                f"de {_corto(args.get('documento', ''))}")
+    return f"⚙️ {fn}"
+
+
+def _investigar_deepseek(system: str, pregunta: str, scope: list, model: str,
+                         max_rounds: int = AGENT_MAX_ROUNDS):
+    """FASE A con DeepSeek V4 (formato OpenAI, no-streaming). GENERADOR: hace `yield` de cada
+    paso legible (para el progreso en vivo) y RETORNA (evidencia_texto, trazas) al terminar."""
+    tools = _tools_openai()
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": pregunta}]
+    evidencia, trazas = [], []
+    for _ in range(max_rounds):
+        body = {"model": model or DEEPSEEK_MODEL, "messages": messages, "tools": tools,
+                "tool_choice": "auto", "stream": False, "max_tokens": CHAT_MAX_TOKENS}
+        r = session.post(f"{DEEPSEEK_URL}/chat/completions", json=body,
+                         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"}, timeout=300)
+        r.raise_for_status()
+        msg = r.json()["choices"][0]["message"]
+        tcs = msg.get("tool_calls") or []
+        if not tcs:
+            break                       # el modelo ya no pide herramientas → evidencia completa
+        messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": tcs})
+        for tc in tcs:
+            fn = tc["function"]["name"]
+            try:
+                args = json.loads(tc["function"].get("arguments") or "{}")
+            except Exception:
+                args = {}
+            yield _paso_legible(fn, args)
+            resultado = _ejecutar_tool(fn, args, scope)
+            firma = ", ".join(f"{k}={v}" for k, v in args.items())
+            trazas.append({"tool": fn, "args": args})
+            evidencia.append(f"▸ {fn}({firma})\n{resultado}")
+            messages.append({"role": "tool", "tool_call_id": tc["id"], "content": resultado})
+    return "\n\n---\n\n".join(evidencia), trazas
+
+
+def _tools_gemini() -> list:
+    """Traduce AGENT_TOOLS al formato function_declarations de Gemini (tipos en MAYÚSCULA)."""
+    decls = []
+    for t in AGENT_TOOLS:
+        props = {k: {"type": "STRING", "description": desc} for k, (ty, desc) in t["params"].items()}
+        decls.append({"name": t["name"], "description": t["descripcion"],
+                      "parameters": {"type": "OBJECT", "properties": props, "required": t["requeridos"]}})
+    return [{"function_declarations": decls}]
+
+
+def _investigar_gemini(system: str, pregunta: str, scope: list, model: str,
+                       max_rounds: int = AGENT_MAX_ROUNDS):
+    """FASE A con Gemini (generateContent, NO-streaming → esquiva el bug de streaming+functionCall).
+    Round-trip: functionCall (role model) → functionResponse (role function)."""
+    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+           f"{model or GEMINI_CHAT_MODEL}:generateContent")
+    base = {"systemInstruction": {"parts": [{"text": system}]}, "tools": _tools_gemini(),
+            "toolConfig": {"functionCallingConfig": {"mode": "AUTO"}}}
+    contents = [{"role": "user", "parts": [{"text": pregunta}]}]
+    evidencia, trazas = [], []
+    for _ in range(max_rounds):
+        r = session.post(url, json={**base, "contents": contents},
+                         headers={"x-goog-api-key": GEMINI_API_KEY}, timeout=300)
+        r.raise_for_status()
+        cand = (r.json().get("candidates") or [{}])[0]
+        parts = (cand.get("content") or {}).get("parts") or []
+        fcalls = [p["functionCall"] for p in parts if "functionCall" in p]
+        if not fcalls:
+            break
+        contents.append(cand["content"])                 # turno del modelo, verbatim
+        respuestas = []
+        for fc in fcalls:
+            fn, args = fc.get("name", ""), (fc.get("args") or {})
+            yield _paso_legible(fn, args)
+            resultado = _ejecutar_tool(fn, args, scope)
+            firma = ", ".join(f"{k}={v}" for k, v in args.items())
+            trazas.append({"tool": fn, "args": args})
+            evidencia.append(f"▸ {fn}({firma})\n{resultado}")
+            respuestas.append({"functionResponse": {"name": fn, "response": {"content": resultado}}})
+        contents.append({"role": "function", "parts": respuestas})
+    return "\n\n---\n\n".join(evidencia), trazas
+
+
+def _investigar_ollama(system: str, pregunta: str, scope: list, model: str,
+                       max_rounds: int = AGENT_MAX_ROUNDS):
+    """FASE A con Gemma vía Ollama `/api/chat` nativo, NO-streaming (evita el bug de tool_calls
+    en streaming del endpoint OpenAI-compatible). tool-result = {role:tool, content, tool_name}."""
+    tools = _tools_openai()
+    headers = {"Authorization": f"Bearer {OLLAMA_API_KEY}"} if OLLAMA_API_KEY else {}
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": pregunta}]
+    evidencia, trazas = [], []
+    for _ in range(max_rounds):
+        body = {"model": model or OLLAMA_MODEL, "messages": messages, "tools": tools, "stream": False}
+        r = session.post(f"{OLLAMA_URL}/api/chat", json=body, headers=headers, timeout=300)
+        r.raise_for_status()
+        msg = r.json().get("message", {})
+        tcs = msg.get("tool_calls") or []
+        if not tcs:
+            break
+        messages.append(msg)                             # turno del asistente, verbatim
+        for tc in tcs:
+            fn = tc["function"]["name"]
+            args = tc["function"].get("arguments") or {}
+            if isinstance(args, str):                    # por si el modelo la manda como string
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {}
+            yield _paso_legible(fn, args)
+            resultado = _ejecutar_tool(fn, args, scope)
+            firma = ", ".join(f"{k}={v}" for k, v in args.items())
+            trazas.append({"tool": fn, "args": args})
+            evidencia.append(f"▸ {fn}({firma})\n{resultado}")
+            messages.append({"role": "tool", "content": resultado, "tool_name": fn})
+    return "\n\n---\n\n".join(evidencia), trazas
+
+
+# Adaptadores de FASE A por proveedor = motores donde el modo agéntico rinde. En la evaluación
+# 2026-07-17 (cuaderno GSI) DeepSeek V4 (22 tool-calls, investigación ejemplar) y Gemini 3.5
+# (5 calls, respuesta completa y correcta) lo hicieron bien; Gemma 4 hizo UNA sola llamada
+# (degeneró a RAG de un tiro), fue el más lento y mezcló métodos → se deja SIN registrar (su
+# adaptador `_investigar_ollama` queda listo por si mejora, pero el botón se le apaga solo vía
+# `agentic_capaz`). Sonnet/Bedrock pendiente (es el confiable; no hizo falta evaluarlo).
+AGENT_ADAPTERS = {"deepseek": _investigar_deepseek, "gemini": _investigar_gemini}
+
+
 @app.post("/ask")
 def ask(req: AskReq, authorization: str | None = Header(default=None)):
     check_token(authorization)
@@ -952,8 +1221,43 @@ def ask(req: AskReq, authorization: str | None = Header(default=None)):
                   + "\n\n".join(partes) + "\n\n")
 
     def stream():
+        # ── FASE A (opcional): investigación agéntica con herramientas ANTES de responder ──
+        # Corre DENTRO del stream para emitir el progreso en vivo ({"status": …}); así el ~1-2 min
+        # de investigación no es a ciegas. Si algo falla, se ignora y se responde con el RAG de un
+        # tiro (el CONTEXTO normal sigue presente → nunca queda peor). Solo si el toggle está on y
+        # el proveedor tiene adaptador (DeepSeek, Gemini).
+        evidencia_block, agentic_ok, agentic_trazas = "", False, []
         try:
-            user = f"{mapa}=== CONTEXTO ===\n{contexto}{nota_img}\n\n{previa}=== PREGUNTA ===\n{req.query}"
+            if req.agentic and provider in AGENT_ADAPTERS:
+                lento = provider != "deepseek"   # Gemini/otros: sin thinking, avisar que tarda más
+                aviso = ("🔬 Investigación profunda: voy a indagar tu biblioteca paso a paso. "
+                         + ("Con este motor puede tardar un par de minutos — puedes volver luego; "
+                            "el progreso queda registrado aquí." if lento
+                            else "Suele tomar 1-2 minutos."))
+                yield json.dumps({"status": aviso}) + "\n"
+                try:
+                    scope = _scope_sources(req.doc, req.docs)
+                    sys_ag = SYS_AGENTE + "\n\n=== BIBLIOTECA EN ALCANCE ===\n" + mapa_cuaderno(scope)
+                    gen_ag = AGENT_ADAPTERS[provider](sys_ag, req.query, scope, model)
+                    evidencia = ""
+                    while True:
+                        try:
+                            paso = next(gen_ag)
+                        except StopIteration as fin:
+                            evidencia, agentic_trazas = fin.value or ("", [])
+                            break
+                        yield json.dumps({"status": paso}) + "\n"
+                    if evidencia:
+                        evidencia_block = ("=== INVESTIGACIÓN (hallazgos indagando la biblioteca; "
+                                           "úsalos como fuente PRINCIPAL, citando el paper) ===\n"
+                                           + evidencia + "\n\n")
+                        agentic_ok = True
+                        yield json.dumps({"status": "✍️ Redactando la respuesta…"}) + "\n"
+                except Exception:
+                    evidencia_block, agentic_ok, agentic_trazas = "", False, []  # fallback al RAG
+
+            user = (f"{mapa}{evidencia_block}=== CONTEXTO ===\n{contexto}{nota_img}\n\n"
+                    f"{previa}=== PREGUNTA ===\n{req.query}")
             if provider == "deepseek":
                 gen = _chat_deepseek(sys_chat(), user, imagenes, model, req.thinking)
             else:
@@ -969,8 +1273,9 @@ def ask(req: AskReq, authorization: str | None = Header(default=None)):
                     yield json.dumps({"token": item}) + "\n"
         except Exception as e:
             yield json.dumps({"error": f"{provider}: {e}"}) + "\n"
-        yield json.dumps({"done": True, "provider": provider,
-                          "mejor_score": mejor, "sources": fuentes}) + "\n"
+        yield json.dumps({"done": True, "provider": provider, "mejor_score": mejor,
+                          "sources": fuentes, "agentic": agentic_ok,
+                          "trazas": agentic_trazas}) + "\n"
 
     return StreamingResponse(stream(), media_type="application/x-ndjson")
 

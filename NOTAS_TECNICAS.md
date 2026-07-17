@@ -15,7 +15,7 @@ convenciones. Arquitectura y diseño → `CONTEXTO.md`. Instalación y uso → `
 | Router + Extraer | `extraer.py` (vía `ingesta.py`) | `raw/<doc>.pdf` → `md/<doc>.md` + `md/<doc>_figs/*.jpeg` |
 | **Plan de figuras** ⏸ | `describir_figuras.py` (1ª pasada) | md → `descripciones/<doc>_figuras_plan.json` y PAUSA (exit 3) |
 | **Revisión humana** | `revisar_figuras.py` (puerto 8902) | el usuario revisa/corrige/aprueba el plan (visual, sin Qdrant) |
-| Describir figuras | `describir_figuras.py` (2ª pasada) | plan aprobado → `descripciones/<doc>.jsonl` (Bedrock/Sonnet, type-aware) |
+| Describir figuras | `describir_figuras.py` (2ª pasada) | plan aprobado → `descripciones/<doc>.jsonl` (Bedrock/Sonnet, type-aware; ver nota de MENCIONES abajo) |
 | Explicar tablas (**por VISIÓN**) | `describir_tablas.py` | localiza la tabla en el PDF, **renderiza la página** (la endereza si es apaisada) → Sonnet/Gemma **reconstruye el Markdown fiel** → `descripciones/<doc>_tablas.jsonl` (+ `_tablas_revisar.txt` con las dudosas, revisión OPCIONAL) |
 | Esquema secciones | `secciones.py` | md → `outlines/<doc>.md` + `.jsonl` (jerarquía + resúmenes) |
 | Chunking | `chunk.py` | md → chunks en memoria; **antepone `[Documento: <source> · Sección: <título>]` al texto ANTES de vectorizar** (ancla de recuperación, ver §4) |
@@ -34,6 +34,16 @@ Recortes de Windows), y **✔ APROBAR**. Recortar/reemplazar invalida el cache d
 imagen (y la firma de los mosaicos incluye tamaños → se regeneran solos). Luego **re-ejecuta el mismo
 comando de ingesta** para continuar. `REVISION_FIGURAS=off` salta la pausa. Para regenerar un plan
 desde cero: borrar el `_figuras_plan.json` y re-correr la ingesta.
+
+**Menciones distantes en figuras (desde 2026-07-17):** al describir cada figura, `describir_figuras.py`
+además del pie y el contexto local (~900 chars contiguos) recoge las **oraciones de TODO el paper que
+citan esa figura por número** ("…como muestra la Fig. 6…", a menudo lejos, en Discusión/Resultados donde
+el autor dice qué CONCLUIR) y se las pasa a Sonnet como bloque `=== MENCIONES EN EL TEXTO ===`
+(`_num_de_caption` + `_menciones_en_texto`, con el punto de "Fig." protegido para no partir la oración; no
+confunde "Fig. 6" con "Fig. 60"). Es automático para toda figura que se describa de aquí en adelante.
+**OJO caché:** las figuras ya descritas ANTES de este cambio conservan su descripción vieja (el cache va
+por nombre de imagen); para que una se beneficie hay que **borrar su `.md` en `descripciones/_cache_<doc>/`
+y re-correr la ingesta** (gasta Sonnet). Las figuras de papers NUEVOS ya salen mejoradas sin hacer nada.
 
 Convención de nombres: **stem limpio** = nombre del PDF sin extensión (sin sufijos como `_noocr`).
 
@@ -58,6 +68,29 @@ El panel derecho tiene **dos pestañas ◎ CONSULTA / ❓ QUIZ** (la pestaña ac
   Flash, Gemma 4) + **toggle 🧠 PENSAMIENTO** aparte (solo DeepSeek); motor y toggle persisten en
   localStorage. El panel de pensamiento nace **colapsado** y con animación "Pensando…" mientras razona
   (pasa a "Pensamiento" estático al terminar).
+- **🔬 INVESTIGACIÓN PROFUNDA (agéntica, 2026-07-17):** toggle aparte (off por defecto), habilitado solo
+  en motores con `agentic_capaz=True` (derivado de `AGENT_ADAPTERS`; hoy DeepSeek). Con él, `/ask` corre
+  una **FASE A** previa: el modelo usa herramientas para indagar el corpus antes de responder. Herramientas
+  (`backend.py`, `AGENT_TOOLS`): `buscar_en_corpus(consulta, documento?)`, `ver_esquema(documento)`,
+  `leer_seccion(documento, titulo)` — reutilizan `buscar` / `outlines` / `_texto_seccion`, todas acotadas
+  al **scope** (`_scope_sources`: doc, cuaderno o todo el corpus). El bucle es **no-streaming** (adaptador
+  por proveedor en `AGENT_ADAPTERS`, p.ej. `_investigar_deepseek`, formato OpenAI, tope `AGENT_MAX_ROUNDS=5`)
+  → esquiva los bugs conocidos de *streaming + tool_calls* de Gemini/Gemma. La evidencia recolectada se
+  antepone como bloque `=== INVESTIGACIÓN ===` y la **FASE B** (respuesta) se transmite con los `_chat_*`
+  de siempre. Si la Fase A lanza, se ignora y se responde con el RAG de un tiro (el CONTEXTO normal sigue
+  ahí → nunca peor). El evento `done` trae `agentic: bool` y `trazas` (herramientas llamadas). Coste/latencia:
+  varias llamadas al modelo por pregunta (~50–120 s en el cuaderno GSI). Adaptadores implementados:
+  `_investigar_deepseek` (formato OpenAI), `_investigar_gemini` (`generateContent` no-streaming; round-trip
+  functionCall role=model → functionResponse role=**function**), `_investigar_ollama` (Ollama `/api/chat`
+  nativo; tool-result `{role:tool, content, tool_name}`, args ya son objeto). **Gating por evaluación**
+  (2026-07-17, cuaderno GSI, misma pregunta): registrados en `AGENT_ADAPTERS` solo DeepSeek y Gemini
+  (rindieron bien); **Gemma NO** (1 sola tool-call, el más lento, mezcló métodos → su adaptador queda
+  definido pero sin registrar). **Progreso en vivo:** la Fase A corre DENTRO de `stream()`; los adaptadores
+  son generadores que hacen `yield` de un paso legible (`_paso_legible`) por cada tool-call y `return`
+  de `(evidencia, trazas)` (se captura vía `StopIteration.value`). `ask()` emite eventos `{"status":…}`
+  (aviso inicial + pasos + "✍️ Redactando…"); la UI los pinta en un panel colapsable "Investigando…"
+  (clases `pensamiento-details`/`.status-linea`) que al terminar se reetiqueta "Investigación" y colapsa.
+  **Pendiente (opcional):** adaptador Sonnet (Anthropic/Bedrock, tool_use nativo).
 - **Cuaderno y paper persisten** entre recargas (`testigo-cuaderno` / `testigo-doc` en localStorage;
   se validan al cargar y caen a "Todos" si el cuaderno/paper ya no existe).
 - **MAPA DEL CUADERNO (2026-07-08):** si el alcance es "— Todo el cuaderno —" (llega `docs` sin `doc`),

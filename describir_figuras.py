@@ -75,6 +75,46 @@ def _limpiar_caption(texto: str) -> str:
     """Quita anclas/etiquetas HTML residuales de marker y normaliza espacios."""
     return re.sub(r"\s+", " ", _HTML_TAG.sub("", texto or "")).strip()
 
+
+def _num_de_caption(caption: str):
+    """Número de figura/tabla del pie ('Figure 6. …' → 6). None si el pie no lo trae
+    (mosaicos sin número, pies mal detectados) → entonces no se buscan menciones."""
+    m = re.match(r"[\s*_]*(?:fig(?:ure|ura)?s?|tables?|tablas?|cuadros?)\.?\s*(\d+)",
+                 caption or "", re.IGNORECASE)
+    return int(m.group(1)) if m else None
+
+
+def _menciones_en_texto(md_text: str, num, max_frases: int = 8, max_chars: int = 1600) -> str:
+    """Oraciones de TODO el documento que citan la figura número `num` ('…como muestra la
+    Fig. 6…'), estén donde estén —normalmente lejos de la imagen, en Discusión/Resultados,
+    que es donde el autor dice qué CONCLUIR de ella. Complementa al contexto local (que solo
+    ve las ~900 letras contiguas a la figura). Regla simple, sin nueva capa de IA."""
+    if not num:
+        return ""
+    # Cita a ESA figura: 'fig 6' pero NO 'fig 60' ((?![0-9]) corta); admite 'figure 6a', 'figs. 6'.
+    ref = re.compile(rf"\bfig(?:ure|ura)?s?\.?\s*0*{num}(?![0-9])", re.IGNORECASE)
+    plano = re.sub(r"!\[\]\([^)]*\)", " ", md_text)                 # fuera las imágenes
+    plano = re.sub(r"^#+\s.*$", " ", plano, flags=re.MULTILINE)     # fuera los títulos
+    plano = _HTML_TAG.sub("", plano)                                # fuera anclas <span> de marker
+    plano = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", plano)          # [texto](url) → texto
+    plano = plano.replace("\\", "")                                 # escapes '\(' de marker
+    plano = re.sub(r"\s+", " ", plano)
+    # El punto de 'Fig.' parece fin de oración y partiría 'Fig. 6' en dos → lo protejo
+    # con un centinela antes de segmentar, y lo restauro en cada frase.
+    plano = re.sub(r"\b(figs?|figures?|figuras?|tables?|tablas?|cuadros?)\.",
+                   lambda m: m.group(1) + "\x00", plano, flags=re.IGNORECASE)
+    frases, vistas, total = [], set(), 0
+    for fr in re.split(r"(?<=[.!?])\s+", plano):
+        fr = fr.replace("\x00", ".").strip()
+        if len(fr) < 12 or fr in vistas or not ref.search(fr):
+            continue
+        frases.append(fr)
+        vistas.add(fr)
+        total += len(fr)
+        if len(frases) >= max_frases or total >= max_chars:
+            break
+    return "\n".join(f"- …{f}" for f in frases)
+
 SISTEMA = f"Eres un experto en {DISCIPLINA} que explica figuras técnicas a un lector en formación."
 
 PROMPT_BASE = (
@@ -87,8 +127,10 @@ PROMPT_BASE = (
     "principal, y —lo más importante— QUÉ TRANSMITE o qué hay que concluir de él. Si sirve, "
     "da un ejemplo de cómo leerlo ('a mayor X, ...').\n"
     "- TABLA: resume su estructura (qué compara) y las conclusiones clave.\n\n"
-    "Apóyate en el PIE DE FIGURA y el TEXTO DE CONTEXTO para anclar la explicación en lo que "
-    "el autor quiso mostrar, pero describe también lo que se ve en la imagen. Sé preciso, "
+    "Apóyate en el PIE DE FIGURA, el TEXTO DE CONTEXTO y las MENCIONES EN EL TEXTO (oraciones "
+    "de todo el documento que citan esta figura, a menudo lejos de ella y donde el autor dice "
+    "QUÉ concluir de ella) para anclar la explicación en lo que el autor quiso mostrar, pero "
+    "describe también lo que se ve en la imagen. Sé preciso, "
     "profesional y claro (2-3 párrafos). IMPORTANTE: empieza DIRECTO con el contenido, sin "
     "saludos, sin dirigirte al lector, sin frases introductorias (nada de 'Hola' ni 'Esta "
     "figura que tienes delante'). Al final, agrega una línea 'Palabras clave:' con "
@@ -133,11 +175,12 @@ def _describir_bedrock(b64: str, mime: str, prompt: str) -> str:
     return "".join(b.text for b in msg.content if b.type == "text").strip()
 
 
-def describir_imagen(img_path: Path, caption: str, contexto: str) -> str:
+def describir_imagen(img_path: Path, caption: str, contexto: str, menciones: str = "") -> str:
     b64 = base64.b64encode(img_path.read_bytes()).decode("ascii")
     mime = "image/jpeg" if img_path.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+    bloque_menc = (f"\n\n=== MENCIONES EN EL TEXTO ===\n{menciones}") if menciones else ""
     prompt = (f"{PROMPT_BASE}\n\n=== PIE DE FIGURA ===\n{caption or '(sin pie de figura)'}"
-              f"\n\n=== TEXTO DE CONTEXTO ===\n{contexto or '(sin contexto)'}")
+              f"\n\n=== TEXTO DE CONTEXTO ===\n{contexto or '(sin contexto)'}{bloque_menc}")
     if DESCRIBE_PROVIDER != "gemini":  # bedrock por defecto; solo "gemini" fuerza Gemini
         return _describir_bedrock(b64, mime, prompt)
     # --- Gemini (respaldo) ---
@@ -409,6 +452,7 @@ def _generar_pendientes_manual(figuras, figs_dir: Path, cache_dir: Path, doc_ste
         f"- Ruta de la imagen: `{(figs_dir / f['img']).resolve()}`\n"
         f"- Pie de figura: {f['caption'] or '(sin pie de figura)'}\n"
         f"- Texto de contexto: {f['contexto'] or '(sin contexto)'}\n"
+        f"- Menciones en el texto: {f.get('menciones') or '(sin menciones)'}\n"
         for f in pendientes
     )
     ejemplo = pendientes[0]["img"]
@@ -482,6 +526,12 @@ def main(doc_stem: str):
     cache_dir = OUT_DIR / f"_cache_{doc_stem}"
     cache_dir.mkdir(exist_ok=True)
 
+    # Menciones distantes: por cada figura, junta las oraciones de TODO el paper que la citan
+    # (a menudo lejos del pie, donde el autor dice qué concluir). Una sola lectura del md.
+    md_text = md_path.read_text(encoding="utf-8")
+    for f in figuras:
+        f["menciones"] = _menciones_en_texto(md_text, _num_de_caption(f.get("caption", "")))
+
     # ── Fallback controlado por VISION_PROVIDER (bedrock | gemini | manual) ──
     if DESCRIBE_PROVIDER == "manual":
         pendientes = _generar_pendientes_manual(figuras, figs_dir, cache_dir, doc_stem)
@@ -520,7 +570,8 @@ def main(doc_stem: str):
         else:
             print(f"[{n:>2}] {fig['img']}: describiendo ...", end=" ", flush=True)
             try:
-                desc = describir_imagen(img_path, fig["caption"], fig["contexto"])
+                desc = describir_imagen(img_path, fig["caption"], fig["contexto"],
+                                        fig.get("menciones", ""))
             except Exception as e:
                 print(f"FALLO: {e}")
                 break

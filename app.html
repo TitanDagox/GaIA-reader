@@ -408,11 +408,11 @@ button{font:inherit; color:inherit}
   background:var(--sheet-2); border:1px solid var(--neat); padding:.4rem .45rem}
 .fila-motor{grid-column:1 / -1; display:flex; gap:.5rem; align-items:stretch}
 .fila-motor select{flex:1}
-#btnThink{all:unset; cursor:pointer; font-family:var(--f-mono); font-size:.68rem;
+#btnThink,#btnDeep{all:unset; cursor:pointer; font-family:var(--f-mono); font-size:.68rem;
   letter-spacing:.06em; color:var(--ink); background:var(--sheet-2);
   border:1px solid var(--neat); padding:.4rem .6rem; white-space:nowrap}
-#btnThink[aria-pressed="true"]{background:var(--intrusivo); color:#fff; border-color:var(--intrusivo)}
-#btnThink[disabled]{opacity:.4; cursor:default}
+#btnThink[aria-pressed="true"],#btnDeep[aria-pressed="true"]{background:var(--intrusivo); color:#fff; border-color:var(--intrusivo)}
+#btnThink[disabled],#btnDeep[disabled]{opacity:.4; cursor:default}
 .consulta textarea{resize:none; min-height:3.6rem; max-height:11rem;
   font-family:var(--f-cuerpo); font-size:.92rem; color:var(--ink);
   background:var(--sheet-2); border:1px solid var(--neat); padding:.5rem .65rem; width:100%}
@@ -476,6 +476,9 @@ button{font:inherit; color:inherit}
 }
 .pensamiento-cuerpo{font-family:var(--f-cuerpo); font-style:italic;
   color:var(--ink-2); margin-top:.4rem; white-space:pre-wrap; line-height:1.4}
+/* Líneas del progreso de investigación profunda (Fase A) */
+.status-linea{font-family:var(--f-mono); font-style:normal; font-size:.82em;
+  color:var(--ink-2); padding:.12rem 0; line-height:1.35}
 
 /* ── Panel Quiz-me (Tarea 5) ── */
 .quiz-panel {
@@ -993,6 +996,8 @@ button{font:inherit; color:inherit}
         <select id="selProv" aria-label="Modelo LLM"></select>
         <button type="button" id="btnThink" aria-pressed="false"
                 title="Razonamiento explícito de DeepSeek (más lento, más profundo)">🧠 PENSAMIENTO</button>
+        <button type="button" id="btnDeep" aria-pressed="false"
+                title="Investigación profunda: el modelo indaga tu biblioteca con herramientas antes de responder (más lento, mejor para comparar papers)">🔬 INVESTIGACIÓN</button>
       </div>
       <div class="input-wrap">
         <button type="button" class="icono-adj" id="btnAdj" title="Adjuntar captura (p.ej. una tabla del PDF) — requiere modelo con ·visión">📎</button>
@@ -1417,6 +1422,7 @@ $("selCuaderno").addEventListener("change", async e => {
 
 let MOTORES = [];
 let THINK = localStorage.getItem("testigo-think")==="1";
+let DEEP = localStorage.getItem("testigo-deep")==="1";
 async function cargarProveedores(){
   const d = await (await fetch("/providers")).json();
   MOTORES = d.motores || [];
@@ -1459,10 +1465,23 @@ function pintarThink(){
     ? "Razonamiento explícito de DeepSeek (más lento, más profundo)"
     : "El pensamiento solo está disponible en los modelos DeepSeek";
   b.setAttribute("aria-pressed", (THINK && m.thinking_capaz) ? "true" : "false");
+  pintarDeep();
+}
+function pintarDeep(){
+  const b = $("btnDeep"), m = motorBase();
+  b.disabled = !m.agentic_capaz;
+  b.title = m.agentic_capaz
+    ? "Investigación profunda: el modelo indaga tu biblioteca con herramientas antes de responder (más lento, mejor para comparar papers)"
+    : "Investigación profunda no disponible en este motor (habilitada en DeepSeek y Gemini)";
+  b.setAttribute("aria-pressed", (DEEP && m.agentic_capaz) ? "true" : "false");
 }
 $("btnThink").addEventListener("click", ()=>{
   if($("btnThink").disabled) return;
   THINK = !THINK; localStorage.setItem("testigo-think", THINK ? "1" : "0"); pintarThink();
+});
+$("btnDeep").addEventListener("click", ()=>{
+  if($("btnDeep").disabled) return;
+  DEEP = !DEEP; localStorage.setItem("testigo-deep", DEEP ? "1" : "0"); pintarDeep();
 });
 function mostrarPDF(){
   const fr=$("pdfFrame"), vac=$("pdfVacio");
@@ -1814,6 +1833,7 @@ async function enviar(){
 
   let texto="", fuentes=[], web=null, thoughtText="", huboError=false;
   let detailsEl=null, thoughtBodyEl=null;
+  let statusEl=null, statusBodyEl=null;   // panel de progreso de la investigación profunda (Fase A)
   try{
     const m=motorSel();
     const historial=(CONV.turnos||[]).slice(-4).map(t=>({q:t.q, a:(t.a||"").slice(0,900)}));
@@ -1822,7 +1842,7 @@ async function enviar(){
     const r=await fetch("/ask",{method:"POST",signal:controller.signal,
       headers:{...HDRS,"Content-Type":"application/json"},
       body:JSON.stringify({query:q, provider:m.provider||null, model:m.model||null,
-                           thinking:!!m.thinking, ...scope, historial,
+                           thinking:!!m.thinking, agentic:!!(DEEP && m.agentic_capaz), ...scope, historial,
                            ...(adjuntas.length ? {imagenes_usuario:adjuntas} : {})})});
     if(!r.ok){ let msj=""; try{ msj=(await r.json()).detail||""; }catch{} throw new Error(msj||("HTTP "+r.status)); }
     const reader=r.body.getReader(); const dec=new TextDecoder(); let buf="";
@@ -1830,6 +1850,25 @@ async function enviar(){
       buf+=dec.decode(value,{stream:true}); const ls=buf.split("\n"); buf=ls.pop();
       for(const ln of ls){ if(!ln.trim())continue; let d; try{d=JSON.parse(ln);}catch{continue;}
         if(d.nota){ web=d.nota; }
+        if(d.status){
+          const escr = cuerpo.querySelector(".escribiendo");
+          if(escr) escr.remove();
+          if(!statusEl){
+            statusEl = document.createElement("details");
+            statusEl.className = "pensamiento-details pensando";
+            statusEl.open = true;   // abierto mientras investiga: el punto es VER la actividad en vivo
+            statusEl.innerHTML = `<summary><span class="cerebro">🔬</span><span class="lbl">Investigando…</span></summary>`;
+            statusBodyEl = document.createElement("div");
+            statusBodyEl.className = "pensamiento-cuerpo";
+            statusEl.appendChild(statusBodyEl);
+            art.insertBefore(statusEl, cuerpo);
+          }
+          const row = document.createElement("div");
+          row.className = "status-linea";
+          row.textContent = d.status;
+          statusBodyEl.appendChild(row);
+          art.scrollIntoView({block:"end"});
+        }
         if(d.thought){
           if(!detailsEl){
             detailsEl = document.createElement("details");
@@ -1866,6 +1905,11 @@ async function enviar(){
   if(detailsEl){                       // el pensamiento en vivo terminó: para la animación y reetiqueta
     detailsEl.classList.remove("pensando");
     const lbl=detailsEl.querySelector(".lbl"); if(lbl) lbl.textContent="Pensamiento";
+  }
+  if(statusEl){                        // la investigación terminó: para la animación, reetiqueta y colapsa
+    statusEl.classList.remove("pensando");
+    const lbl=statusEl.querySelector(".lbl"); if(lbl) lbl.textContent="Investigación";
+    statusEl.open=false;
   }
   finalizar(art, cuerpo, aviso, texto, fuentes, web, q, thoughtText);
   if(huboError){
