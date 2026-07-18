@@ -1317,13 +1317,15 @@ def figura(doc: str, img: str):
 
 @app.get("/pdf")
 def pdf(doc: str):
-    """Sirve el PDF original (raw/<doc>.pdf) para el visor central. inline → el navegador lo abre."""
-    stem = Path(doc).stem            # sin rutas ni extensión — solo el nombre base
-    p = RAW_DIR / f"{stem}.pdf"
+    """Sirve el PDF original (raw/<doc>.pdf) para el visor central. inline → el navegador lo abre.
+    OJO: usa .name, NO .stem: un título con punto (p.ej. 'et al. 2004') hace que .stem recorte
+    ' 2004)' creyéndolo una extensión → 404 falso. El source nunca trae '.pdf'."""
+    nombre = Path(doc).name          # nombre completo (con sus puntos); solo se le quita la ruta
+    p = RAW_DIR / f"{nombre}.pdf"
     if not p.exists():
         raise HTTPException(status_code=404, detail="PDF no encontrado")
     return FileResponse(p, media_type="application/pdf",
-                        headers={"Content-Disposition": f'inline; filename="{stem}.pdf"'})
+                        headers={"Content-Disposition": f'inline; filename="{nombre}.pdf"'})
 
 
 @app.get("/md")
