@@ -60,6 +60,16 @@ diseño ("GaIA"/"TESTIGO", drill-log, paleta atacamita/calcopirita) sigue la ski
 instalada en `.agents/skills/`. `app.html` se relee en cada `GET /app` → los cambios de frontend NO
 requieren reiniciar el backend; los de `backend.py` SÍ.
 
+**Panel central = LECTOR del `.md`** (desde 2026-07-18, antes solo visor de PDF). Renderiza el markdown
+de marker con el motor `render()` (KaTeX + figuras vía `/figura`, reescribiendo las refs de imagen).
+Endpoint `GET /md?doc=`. Botón `▦ PDF ⇄ ▤ Texto` para el original; sin `.md` cae al PDF. **Clic en una
+cita inline `[n]`** (`cargarLector(f.source, {resaltar|img})`) carga el `.md` de esa fuente y hace
+scroll+resalta el pasaje (match normalizado sobre bloques `p/li/td/h*`) o la figura. El scroll va en
+`setTimeout` (rAF se congela con la pestaña en segundo plano). **Estado vacío del modo cuaderno =
+portada** (`mostrarPortada()`): tarjetas por paper (autor-año + conteos que da `/documentos`); clic =
+`seleccionarDoc()`. El `<select>` de documento acorta nombres largos con elipsis a la mitad
+(`etiquetaDoc`, ver 2026-07-17) porque el popup nativo no es acotable por CSS.
+
 El panel derecho tiene **dos pestañas ◎ CONSULTA / ❓ QUIZ** (la pestaña activa persiste en localStorage).
 
 - **Consulta (chat):** **📎 imágenes adjuntas** (botón o Ctrl+V; hasta 3; requiere motor '·visión'; el
@@ -258,3 +268,19 @@ Revisar también `outlines/<doc>.md` (resumen por secciones) a ojo.
    y al re-describir (`--rehacer`) Sonnet recibe el pie bueno. Síntoma a cazar al revisar: "sci", "jstj",
    "st", letras sueltas donde debería haber griegas. `_limpiar_caption` sí limpia lo mecánico (etiquetas
    HTML, enlaces `[texto](#ancla)`, brackets escapados `\[6\]`), pero no puede reconstruir un glifo mal leído.
+22. **Marcador `[[FIG:…]]` mal formado se filtraba como texto crudo** (2026-07-18). El backend pide al
+   modelo insertar la figura con `[[FIG:N]]` (N = número de `[Fuente N]`), pero a veces —sobre todo en
+   modo cuaderno— escribe texto: `[[FIG:Quantification of the GSI Chart (Hoek 2013) — Figure 5]]`. La
+   regex de `finalizar` solo sustituía `[[FIG:\d+]]`, así que ese marcador ni traía imagen ni se borraba
+   → quedaba visible. Solución en `app.html`: (a) `render()` oculta `\[\[FIG:[^\]]*\]\]` (cualquier
+   marcador) durante el streaming; (b) `finalizar` acepta ref numérico O descriptivo — si es texto,
+   `resolverFigDescrita()` busca la figura entre las fuentes por documento + número de pie; si la
+   encuentra la muestra, y si no (no se recuperó), **borra el marcador** (nunca deja texto crudo). No se
+   intenta traerla del índice si no está entre las fuentes (sería otra capa; el borrado es la red segura).
+23. **Citas cruzan papers en modo cuaderno (no es bug)** (2026-07-18). Al consultar "todo el cuaderno"
+   las `[Fuente N]` provienen de varios papers; una cita `[n]` puede abrir un paper distinto al del
+   LECTOR, y el modelo a veces **mis-atribuye** (cita una Fuente que no sostiene la afirmación, p.ej.
+   citó la Tabla de σci de Hoek-Brown 1997 para el "Joint Condition JCond₈₉", que son cosas distintas).
+   El clic hace lo correcto (abre la Fuente citada); el LECTOR + el tooltip (nombre del paper) son la
+   herramienta para **verificar** y cazar la mala cita. Mitigable endureciendo el prompt de citación,
+   no eliminable. Es, de hecho, el valor del RAG con evidencia a la vista.

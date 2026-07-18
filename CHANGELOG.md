@@ -6,6 +6,27 @@ se etiquetará `v1.0` cuando el repositorio se haga público. Lo más reciente v
 > Convención: cada cambio hecho se anota aquí en una línea. El *porqué* y el diseño vivo están en
 > `CONTEXTO.md`; el detalle técnico y los bugs resueltos, en `NOTAS_TECNICAS.md`.
 
+## 2026-07-18
+
+### App — lector central del `.md` y portada del cuaderno
+- **El panel central pasa de "visor de PDF" a LECTOR del `.md`**: renderiza el markdown de marker
+  (fórmulas en KaTeX, figuras vía `/figura`, texto seleccionable) con el mismo motor `render()` del
+  chat. Nuevo endpoint `GET /md?doc=`. El PDF original queda a un clic (botón `▦ PDF ⇄ ▤ Texto`);
+  si un paper no tiene `.md`, cae al PDF (nunca peor que antes).
+- **Clic en una cita `[n]` → salta a la fuente en el lector**: si es texto, carga el `.md` de ESE
+  paper (aunque sea otro del cuaderno) y hace scroll + resalta el párrafo citado; si es figura/tabla,
+  salta a la imagen y la destella. Convierte las citas en navegación verificable (RAG con evidencia
+  a la vista). El scroll usa `setTimeout` (no `requestAnimationFrame`, que se congela en segundo plano).
+- **Portada del cuaderno** (estado vacío del modo cuaderno, antes un placeholder muerto): grilla de
+  tarjetas, una por paper (autor-año + título + conteos de figuras/tablas/secciones). Clic en una =
+  la selecciona (carga su `.md` + índice). `/documentos` ahora devuelve los conteos por tipo.
+- **Citas inline estilo Wikipedia `[1,2]`**: se corrigió el bug de que en una cita multi-fuente
+  ("Fuentes 1, 3 y 8") solo se enlazaba el PRIMER número; ahora cada número es su propio enlace
+  (superíndice, hover = preview), y se absorben los paréntesis que envolvían la cita.
+- **Marcadores `[[FIG:…]]` mal formados ya no se filtran**: si el modelo escribe texto en vez del N de
+  Fuente (`[[FIG:<doc> — Figure 5]]`), se resuelve la figura por documento+número si está entre las
+  fuentes, y si no, se borra el marcador (nunca queda texto crudo). Detalle en `NOTAS_TECNICAS.md`.
+
 ## 2026-07-17
 
 ### App — UI

@@ -156,6 +156,38 @@ button{font:inherit; color:inherit}
   font-family:var(--f-mono); font-size:.72rem; color:var(--ink-2); text-align:center; padding:2rem}
 /* el display:flex de arriba pisaría el atributo hidden → forzar ocultamiento */
 .visor iframe[hidden], .visor-vacio[hidden]{display:none}
+/* ── Lector central: el .md de marker renderizado (markdown + KaTeX + figuras) ── */
+.md-reader{flex:1; min-height:0; overflow:auto; padding:1.1rem 1.4rem; background:var(--sheet-2);
+  font-family:var(--f-cuerpo); font-size:.9rem; line-height:1.62; color:var(--ink)}
+.md-reader[hidden]{display:none}
+.md-reader img{max-width:100%; height:auto; display:block; margin:.7rem auto; background:#fff; border:1px solid var(--neat)}
+.md-reader h1{font-size:1.15rem} .md-reader h2{font-size:1.02rem} .md-reader h3,.md-reader h4{font-size:.92rem}
+.md-reader h1,.md-reader h2,.md-reader h3,.md-reader h4{color:var(--intrusivo); line-height:1.25; margin:1.1rem 0 .5rem}
+.md-reader table{border-collapse:collapse; font-size:.82rem; margin:.6rem 0}
+.md-reader td,.md-reader th{border:1px solid var(--neat); padding:.22rem .45rem}
+.md-reader .katex-display{overflow-x:auto; overflow-y:hidden; padding:.2rem 0}
+/* destello al saltar a una cita */
+@keyframes flashPasaje{0%{background:rgba(231,168,104,.5)} 100%{background:transparent}}
+.pasaje-hit{animation:flashPasaje 2.6s ease-out; border-radius:4px}
+/* ── Portada del cuaderno: índice visual de papers en el estado vacío (modo cuaderno) ── */
+.portada{flex:1; min-height:0; overflow:auto; padding:1.2rem 1.4rem; background:var(--sheet-2)}
+.portada[hidden]{display:none}
+.portada-cab{display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+  border-bottom:1px solid var(--neat); padding-bottom:.6rem; margin-bottom:1rem}
+.portada-cab .tit{font-family:var(--f-rotulo); font-weight:700; font-size:.9rem; letter-spacing:.04em; color:var(--ink)}
+.portada-cab .met{font-family:var(--f-mono); font-size:.7rem; color:var(--ink-2)}
+.portada-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:.7rem}
+.portada-card{all:unset; cursor:pointer; box-sizing:border-box; display:flex; flex-direction:column; gap:.45rem;
+  background:var(--sheet); border:1px solid var(--neat); border-radius:6px; padding:.7rem .8rem; min-height:110px}
+.portada-card:hover{border-color:var(--intrusivo); background:var(--field-focus)}
+.portada-card:focus-visible{outline:2px solid var(--intrusivo); outline-offset:-1px}
+.portada-card .cab{display:flex; align-items:center; justify-content:space-between; gap:.4rem}
+.portada-card .anio{font-family:var(--f-mono); font-size:.62rem; color:var(--intrusivo);
+  border:1px solid var(--intrusivo); border-radius:4px; padding:1px 6px; white-space:nowrap}
+.portada-card .tt{font-family:var(--f-cuerpo); font-size:.8rem; font-weight:500; line-height:1.3; color:var(--ink)}
+.portada-card .stats{margin-top:auto; display:flex; gap:.9rem; font-family:var(--f-mono); font-size:.64rem; color:var(--ink-2)}
+.portada-hint{margin-top:1rem; font-family:var(--f-mono); font-size:.68rem; color:var(--ink-2);
+  display:flex; gap:.4rem; align-items:center}
 
 /* ── Modal de revisión / recorte de figuras ── */
 .modal{position:fixed; inset:0; z-index:80; background:rgba(10,11,13,.72);
@@ -381,9 +413,10 @@ button{font:inherit; color:inherit}
 .fig-inline .fig-cap[open] summary{margin-bottom:.25rem}
 .fig-inline .fig-cap>*:not(summary){line-height:1.4}
 
-/* citas inline enlazadas (hover → preview) */
-.cita{color:var(--agua); border-bottom:1px dotted var(--agua); cursor:help; white-space:nowrap}
-.cita:hover{background:var(--cita-hover)}
+/* citas inline estilo Wikipedia: superíndice [1,2] con cada número enlazado (hover → preview) */
+sup.citas{font-size:.72em; font-weight:600; color:var(--ink-2); white-space:nowrap}
+.cita{color:var(--agua); cursor:help; padding:0 .06em}
+.cita:hover{background:var(--cita-hover); border-radius:2px}
 /* tooltip de preview (nota de campo — siempre oscuro, no se invierte con el tema) */
 .tip{position:fixed; z-index:60; max-width:360px; background:#1f2024; color:#e9eae4;
   padding:.5rem .62rem; box-shadow:0 5px 16px rgba(0,0,0,.4); pointer-events:none;
@@ -954,14 +987,17 @@ button{font:inherit; color:inherit}
 
   <div class="resizer" id="rzIzq" role="separator" aria-label="Ajustar leyenda"></div>
 
-  <section class="visor" id="panelPdf" aria-label="Visor de PDF">
+  <section class="visor" id="panelPdf" aria-label="Lector del documento">
     <div class="visor-cab">
-      <span class="rot">GaIA · PDF</span>
+      <span class="rot">GaIA · LECTOR</span>
       <span class="doc" id="pdfDoc">—</span>
-      <button type="button" id="btnPdfTab" class="mini" title="Abrir en pestaña nueva">↗ pestaña</button>
+      <button type="button" id="btnVerPdf" class="mini" title="Alternar texto ⇄ PDF original">▦ PDF</button>
+      <button type="button" id="btnPdfTab" class="mini" title="Abrir PDF en pestaña nueva">↗ pestaña</button>
     </div>
+    <div id="portada" class="portada" hidden></div>
+    <div id="mdReader" class="md-reader" hidden></div>
     <iframe id="pdfFrame" title="Documento PDF" hidden></iframe>
-    <div class="visor-vacio" id="pdfVacio">Elige un documento en la cartela para verlo aquí.</div>
+    <div class="visor-vacio" id="pdfVacio">Elige un documento en la cartela para leerlo aquí.</div>
   </section>
 
   <div class="resizer" id="rzDer" role="separator" aria-label="Ajustar chat"></div>
@@ -1250,7 +1286,8 @@ let N_RESP = 0, controller = null, OUTLINE = [];
 function render(el, md){
   const mathBlocks = [];
   // Oculta el marcador de figura durante el streaming; finalizar() lo sustituye por la imagen.
-  let processed = (md || "").replace(/\[\[FIG:\s*\d+\s*\]\]/g, "");
+  // (incluye marcadores mal formados con texto, p.ej. [[FIG:<doc> — Figure 5]], para no filtrarlos)
+  let processed = (md || "").replace(/\[\[FIG:[^\]]*\]\]/g, "");
   // Normaliza LaTeX roto: el modelo a veces envuelve fórmulas con $ escapado ($\$>1 km\$$).
   processed = processed.replace(/\$\\\$/g,"$").replace(/\\\$\$/g,"$").replace(/\\\$/g,"$");
 
@@ -1344,8 +1381,19 @@ function mostrarTip(f, el){
   TIP.style.left=x+"px"; TIP.style.top=y+"px";
 }
 function enlazarCitas(cuerpo){
+  // "Fuente N" / "Fuentes 1, 3 y 8" / "(Fuente 2, 5)" → superíndice [1,3,8] con cada número
+  // enlazado por separado (antes solo enlazaba el PRIMER número). Absorbe los paréntesis solo
+  // cuando envuelven la cita entera; si no, los respeta (el \s* va atado al paréntesis para no
+  // comerse el espacio previo). El value/tooltip de cada número los pone el resto del pipeline.
   cuerpo.innerHTML = cuerpo.innerHTML.replace(
-    /(Fuentes?\s+)(\d+)/g, '<span class="cita" data-n="$2">$1$2</span>');
+    /(?:(\()\s*)?Fuentes?\s+(\d+(?:\s*(?:,|y|Y)\s*\d+)*)(?:\s*(\)))?/g,
+    (m, abre, lista, cierra) => {
+      const nums = lista.match(/\d+/g) || [];
+      const inner = nums.map(n => `<span class="cita" data-n="${n}">${n}</span>`).join(",");
+      const sup = `<sup class="citas">[${inner}]</sup>`;
+      if(abre && cierra) return sup;                  // (Fuente N) → [N], sin paréntesis
+      return (abre||"") + sup + (cierra||"");         // paréntesis ajenos: respétalos
+    });
 }
 // delegación: hover sobre .cita o chip con data-n
 const _hilo = document.getElementById("hilo");
@@ -1496,14 +1544,105 @@ $("btnDeep").addEventListener("click", ()=>{
   if($("btnDeep").disabled) return;
   DEEP = !DEEP; localStorage.setItem("testigo-deep", DEEP ? "1" : "0"); pintarDeep();
 });
-function mostrarPDF(){
-  const fr=$("pdfFrame"), vac=$("pdfVacio");
-  if(!DOC){ fr.hidden=true; vac.hidden=false; $("pdfDoc").textContent="—"; return; }
-  fr.src = "/pdf?doc="+encodeURIComponent(DOC)+"#zoom=page-width";
-  fr.hidden=false; vac.hidden=true; $("pdfDoc").textContent=DOC;
+/* ── Lector central: renderiza el .md de marker y salta a la fuente citada ── */
+let LECTOR_DOC = null, VIEW_PDF = false;
+const figURL = (doc, img) => "/figura?doc="+encodeURIComponent(doc)+"&img="+encodeURIComponent(img);
+
+async function cargarLector(doc, opts={}){
+  const rd=$("mdReader"), fr=$("pdfFrame"), vac=$("pdfVacio");
+  if(!doc){ rd.hidden=true; fr.hidden=true; $("pdfDoc").textContent="—"; LECTOR_DOC=null; mostrarPortada(); return; }
+  if(doc!==LECTOR_DOC){
+    const r=await fetch("/md?doc="+encodeURIComponent(doc));
+    if(!r.ok){   // sin .md → cae al PDF (nunca peor que antes)
+      fr.src="/pdf?doc="+encodeURIComponent(doc)+"#zoom=page-width";
+      fr.hidden=false; rd.hidden=true; vac.hidden=true; $("portada").hidden=true; $("pdfDoc").textContent=doc;
+      LECTOR_DOC=doc; VIEW_PDF=true; $("btnVerPdf").textContent="▤ Texto"; return;
+    }
+    let md=await r.text();
+    // reescribe las refs de imagen de marker a nuestro endpoint /figura
+    md = md.replace(/!\[[^\]]*\]\(([^)]+)\)/g, (m,ruta)=>"![]("+figURL(doc, ruta.split("/").pop())+")");
+    render(rd, md);
+    LECTOR_DOC=doc;
+  }
+  VIEW_PDF=false; $("btnVerPdf").textContent="▦ PDF";
+  rd.hidden=false; fr.hidden=true; vac.hidden=true; $("portada").hidden=true; $("pdfDoc").textContent=doc;
+  // setTimeout (no requestAnimationFrame): rAF se congela con la pestaña en segundo plano
+  setTimeout(()=>{
+    if(opts.img) scrollAFigura(rd, opts.img);
+    else if(opts.resaltar) resaltarPasaje(rd, opts.resaltar);
+    else rd.scrollTop=0;
+  }, 0);
 }
+function mostrarPDF(){ cargarLector(DOC); }   // compat: cargarOutline sigue llamando a mostrarPDF
+
+/* Portada del cuaderno: índice visual de papers cuando no hay ninguno seleccionado (modo cuaderno). */
+const _anioDe = src => { const m=(src||"").match(/\(([^()]*\d{4}[^()]*)\)\s*$/); return m?m[1]:""; };
+const _tituloSinAnio = src => (src||"").replace(/\s*\([^()]*\d{4}[^()]*\)\s*$/,"").replace(/\s*[-–—]\s*$/,"").trim();
+function mostrarPortada(){
+  const port=$("portada"), vac=$("pdfVacio");
+  const docs=docsDelCuaderno();
+  if(!docs.length){ port.hidden=true; vac.hidden=false; return; }   // cuaderno sin papers → placeholder
+  vac.hidden=true; port.hidden=false;
+  const totF=docs.reduce((a,d)=>a+(d.figuras||0),0), totT=docs.reduce((a,d)=>a+(d.tablas||0),0);
+  const nombre = CUAD.id ? CUAD.nombre : "Todos los documentos";
+  const cards = docs.map(d=>{
+    const anio=_anioDe(d.source), tt=_tituloSinAnio(d.source);
+    return `<button type="button" class="portada-card" data-src="${esc(d.source)}" title="${esc(d.source)}">`+
+      `<div class="cab"><span style="color:var(--ink-2);font-size:.72rem">▦</span>`+
+      (anio?`<span class="anio">${esc(anio)}</span>`:"")+`</div>`+
+      `<div class="tt">${esc(tt)}</div>`+
+      `<div class="stats"><span title="figuras">◧ ${d.figuras||0}</span>`+
+      `<span title="tablas">▤ ${d.tablas||0}</span>`+
+      `<span title="secciones">¶ ${d.secciones||0}</span></div></button>`;
+  }).join("");
+  port.innerHTML =
+    `<div class="portada-cab"><span class="tit">CUADERNO · ${esc(nombre)}</span>`+
+    `<span class="met">${docs.length} papers · ${totF} figuras · ${totT} tablas</span></div>`+
+    `<div class="portada-grid">${cards}</div>`+
+    `<div class="portada-hint">▸ Clic en un paper para leerlo · o pregúntale al cuaderno completo abajo</div>`;
+}
+function seleccionarDoc(src){ DOC=src; guardarScope(); renderSelDoc(); cargarOutline(); }
+$("portada").addEventListener("click", e=>{
+  const b=e.target.closest(".portada-card"); if(b) seleccionarDoc(b.dataset.src);
+});
+
+const _normLec = s => (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
+  .replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+function _destello(el){ el.classList.remove("pasaje-hit"); void el.offsetWidth; el.classList.add("pasaje-hit");
+  setTimeout(()=>el.classList.remove("pasaje-hit"),2600); }
+function resaltarPasaje(cont, texto){
+  const obj=_normLec(texto).slice(0,45);
+  if(obj.length<10){ cont.scrollTop=0; return false; }
+  for(const b of cont.querySelectorAll("p,li,td,th,h1,h2,h3,h4,blockquote")){
+    if(_normLec(b.textContent).includes(obj)){ b.scrollIntoView({block:"center"}); _destello(b); return true; }
+  }
+  cont.scrollTop=0; return false;   // no encontrado → arriba (nunca rompe)
+}
+function scrollAFigura(cont, img){
+  const base=img.split("/").pop();
+  const el=[...cont.querySelectorAll("img")].find(im=>decodeURIComponent(im.getAttribute("src")||"").includes(base));
+  if(el){ el.scrollIntoView({block:"center"}); _destello(el); return true; }
+  cont.scrollTop=0; return false;   // p.ej. mosaico fusionado que no está en el md crudo
+}
+function abrirFuenteEnLector(f){
+  if((f.type==="figure"||f.type==="table") && f.img) cargarLector(f.source, {img:f.img});
+  else cargarLector(f.source, {resaltar: f.preview || f.texto || ""});
+}
+$("btnVerPdf").addEventListener("click", ()=>{
+  const doc=LECTOR_DOC||DOC; if(!doc) return;
+  const rd=$("mdReader"), fr=$("pdfFrame");
+  VIEW_PDF=!VIEW_PDF;
+  if(VIEW_PDF){ fr.src="/pdf?doc="+encodeURIComponent(doc)+"#zoom=page-width";
+    fr.hidden=false; rd.hidden=true; $("pdfVacio").hidden=true; $("btnVerPdf").textContent="▤ Texto"; }
+  else { fr.hidden=true; rd.hidden=false; $("btnVerPdf").textContent="▦ PDF"; }
+});
 $("btnPdfTab").addEventListener("click", ()=>{
-  if(DOC) window.open("/pdf?doc="+encodeURIComponent(DOC), "_blank");
+  const doc=LECTOR_DOC||DOC; if(doc) window.open("/pdf?doc="+encodeURIComponent(doc), "_blank");
+});
+// clic en una cita inline [n] → abre esa fuente en el lector central
+_hilo.addEventListener("click", e=>{
+  const el=e.target.closest(".cita"); if(!el) return;
+  const f=fuenteDe(el); if(f) abrirFuenteEnLector(f);
 });
 
 async function cargarOutline(){
@@ -1604,6 +1743,19 @@ function numCaptionFig(f){
   const m = /\bfig(?:ure|ura)?\.?\s*(\d+)/i.exec((f && f.titulo) || "");
   return m ? parseInt(m[1], 10) : null;
 }
+/* Resuelve un marcador [[FIG:...]] DESCRIPTIVO (el modelo escribió texto en vez del N de Fuente,
+   p.ej. "Quantification of the GSI Chart (Hoek 2013) — Figure 5") buscando esa figura entre las
+   fuentes por documento + número de pie. Devuelve la fuente-figura o null (→ el marcador se borra). */
+function resolverFigDescrita(ref, fuentes){
+  ref = (ref || "").trim(); if(ref.length < 3) return null;
+  const numM = /\bfig(?:ure|ura)?s?\.?\s*(\d+)/i.exec(ref);
+  const num = numM ? parseInt(numM[1], 10) : null;
+  const docHint = ref.split(/\s*[—–-]\s*|\bfigures?\b|\bfiguras?\b/i)[0].toLowerCase().trim();
+  if(num == null && docHint.length < 4) return null;   // sin pistas fiables → no adivinar
+  return (fuentes || []).find(f => f.type === "figure" && f.img
+    && (num == null || numCaptionFig(f) === num)
+    && (docHint.length < 4 || (f.source || "").toLowerCase().includes(docHint.slice(0, 18)))) || null;
+}
 
 function finalizar(art, cuerpo, aviso, texto, fuentes, web, pregunta, thought){
   art._fuentes={}; (fuentes||[]).forEach(f=>{ art._fuentes[f.n]=f; });
@@ -1619,11 +1771,12 @@ function finalizar(art, cuerpo, aviso, texto, fuentes, web, pregunta, thought){
     detailsEl.appendChild(thoughtBodyEl);
     art.insertBefore(detailsEl, cuerpo);
   }
-  // 1) Sustituir marcadores [[FIG:N]] por la imagen inline en su posición.
-  let txt = (texto||"").replace(/\[\[FIG:\s*(\d+)\s*\]\]/g, (m,n)=>{
-    const f = art._fuentes[n];
-    if(f && f.type==="figure" && f.img){ emitidas.add(String(n)); return "\n\n"+figuraHTML(f)+"\n\n"; }
-    return "";  // fuente inválida/sin imagen → quitar el marcador
+  // 1) Sustituir marcadores [[FIG:...]] por la imagen inline. El ref puede ser el N de Fuente
+  //    ([[FIG:3]]) o —si el modelo se desvió— texto descriptivo ([[FIG:<doc> — Figure 5]]).
+  let txt = (texto||"").replace(/\[\[FIG:\s*([^\]]*?)\s*\]\]/g, (m,ref)=>{
+    const f = /^\d+$/.test(ref) ? art._fuentes[ref] : resolverFigDescrita(ref, fuentes);
+    if(f && f.type==="figure" && f.img){ emitidas.add(String(f.n)); return "\n\n"+figuraHTML(f)+"\n\n"; }
+    return "";  // no resoluble → quitar el marcador (NUNCA dejar el texto crudo)
   });
   render(cuerpo, txt);
   const citadas = citadasEn(texto);   // fuentes realmente citadas (Fuente N) en el cuerpo

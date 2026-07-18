@@ -691,16 +691,26 @@ def config_probar(req: ProbarReq, authorization: str | None = Header(default=Non
 
 @app.get("/documentos")
 def documentos():
-    """Documentos indexados (sources distintos) + si tienen esquema."""
+    """Documentos indexados (sources distintos) + conteos por tipo (para la portada del
+    cuaderno) + si tienen esquema."""
     pts = qdrant.scroll(COLLECTION, limit=10000, with_payload=True)[0]
     srcs = {}
     for p in pts:
         s = p.payload.get("source", "?")
-        srcs[s] = srcs.get(s, 0) + 1
+        d = srcs.setdefault(s, {"puntos": 0, "figuras": 0, "tablas": 0})
+        d["puntos"] += 1
+        t = p.payload.get("type", "text")
+        if t == "figure":
+            d["figuras"] += 1
+        elif t == "table":
+            d["tablas"] += 1
     out = []
-    for s, n in sorted(srcs.items()):
-        out.append({"source": s, "puntos": n,
-                    "tiene_outline": (OUTLINES_DIR / f"{s}.jsonl").exists()})
+    for s, d in sorted(srcs.items()):
+        of = OUTLINES_DIR / f"{s}.jsonl"
+        secciones = sum(1 for _ in of.open(encoding="utf-8")) if of.exists() else 0
+        out.append({"source": s, "puntos": d["puntos"], "figuras": d["figuras"],
+                    "tablas": d["tablas"], "secciones": secciones,
+                    "tiene_outline": of.exists()})
     return {"docs": out}
 
 
@@ -1314,6 +1324,17 @@ def pdf(doc: str):
         raise HTTPException(status_code=404, detail="PDF no encontrado")
     return FileResponse(p, media_type="application/pdf",
                         headers={"Content-Disposition": f'inline; filename="{stem}.pdf"'})
+
+
+@app.get("/md")
+def md(doc: str):
+    """Sirve el markdown de marker (md/<doc>.md) como texto, para el lector central.
+    Las refs de imagen (![](_page_x.jpeg)) las reescribe el frontend a /figura."""
+    stem = Path(doc).name            # sin rutas — solo el nombre base
+    p = MD_DIR / f"{stem}.md"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Markdown no encontrado")
+    return FileResponse(p, media_type="text/markdown; charset=utf-8")
 
 
 # ── Revisión / recorte de figuras (editor en la app) ─────────────────────────
