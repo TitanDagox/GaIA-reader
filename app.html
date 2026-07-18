@@ -1564,14 +1564,17 @@ async function cargarLector(doc, opts={}){
     render(rd, md);
     LECTOR_DOC=doc;
   }
-  VIEW_PDF=false; $("btnVerPdf").textContent="▦ PDF";
-  rd.hidden=false; fr.hidden=true; vac.hidden=true; $("portada").hidden=true; $("pdfDoc").textContent=doc;
-  // setTimeout (no requestAnimationFrame): rAF se congela con la pestaña en segundo plano
-  setTimeout(()=>{
-    if(opts.img) scrollAFigura(rd, opts.img);
-    else if(opts.resaltar) resaltarPasaje(rd, opts.resaltar);
-    else rd.scrollTop=0;
-  }, 0);
+  vac.hidden=true; $("portada").hidden=true; $("pdfDoc").textContent=doc;
+  if(opts.img || opts.resaltar){
+    // clic en una cita → vista TEXTO para saltar/resaltar el pasaje o la figura
+    VIEW_PDF=false; $("btnVerPdf").textContent="▦ PDF"; rd.hidden=false; fr.hidden=true;
+    // setTimeout (no requestAnimationFrame): rAF se congela con la pestaña en segundo plano
+    setTimeout(()=>{ if(opts.img) scrollAFigura(rd, opts.img); else resaltarPasaje(rd, opts.resaltar); }, 0);
+  } else {
+    // selección normal (desplegable/portada) → PDF original por defecto (el .md ya está listo detrás)
+    fr.src="/pdf?doc="+encodeURIComponent(doc)+"#zoom=page-width";
+    VIEW_PDF=true; $("btnVerPdf").textContent="▤ Texto"; fr.hidden=false; rd.hidden=true;
+  }
 }
 function mostrarPDF(){ cargarLector(DOC); }   // compat: cargarOutline sigue llamando a mostrarPDF
 
