@@ -8,6 +8,13 @@ se etiquetará `v1.0` cuando el repositorio se haga público. Lo más reciente v
 
 ## 2026-07-17
 
+### App — UI
+- **Selector de documento: nombres largos ya no desbordan el popup**: el desplegable nativo se
+  estiraba hasta la opción más larga (llegaba al borde de la pantalla; no acotable por CSS). Ahora
+  `etiquetaDoc()` acorta el texto de cada `<option>` a ~62 chars con elipsis a la mitad conservando el
+  `(Autor Año)` final; el nombre completo queda en `value` y en `title` (tooltip). El `<select>` sigue
+  siendo nativo (teclado/accesibilidad intactos).
+
 ### Chat — investigación agéntica (tool-use)
 - **Modo "Investigación profunda" (toggle 🔬 en la UI, off por defecto)**: el modelo indaga la
   biblioteca con herramientas ANTES de responder, para comparaciones precisas entre papers y
