@@ -249,3 +249,12 @@ Revisar también `outlines/<doc>.md` (resumen por secciones) a ojo.
    ya NO hace `CONV.turnos.push(...)`/`guardarConv()` cuando hubo error (sí sigue guardando el caso
    "(detenido)" por Stop), y la ficha muestra un botón **↻ Reintentar** que repone la pregunta y
    reintenta con el motor actualmente seleccionado.
+21. **Símbolos matemáticos de los PIES OCR-eados mal por marker** (2026-07-17). En pies con notación
+   (σ, τ, φ, `|…|`, subíndices) marker a veces lee los glifos como letras: σ→`s`, las barras `|…|`→`j`
+   (visto en Hoek-Brown 2018 Fig. 5: `σci/|σt|` quedó `sci/jstj`). El pie llega así al plan y de ahí a
+   Sonnet como "pie de figura". NO se intenta corregir por heurística (adivinar que "jstj" era `|σt|` es
+   justo el tipo de regla frágil que el §1/P16 nos dice evitar): la red correcta es el **editor de
+   figuras** (`revisar_figuras.py`, 8902), donde el pie es un `<textarea>` editable — se corrige a mano
+   y al re-describir (`--rehacer`) Sonnet recibe el pie bueno. Síntoma a cazar al revisar: "sci", "jstj",
+   "st", letras sueltas donde debería haber griegas. `_limpiar_caption` sí limpia lo mecánico (etiquetas
+   HTML, enlaces `[texto](#ancla)`, brackets escapados `\[6\]`), pero no puede reconstruir un glifo mal leído.

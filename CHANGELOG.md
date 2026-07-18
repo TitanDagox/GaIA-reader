@@ -32,6 +32,19 @@ se etiquetará `v1.0` cuando el repositorio se haga público. Lo más reciente v
   a ser generadores (`yield` del paso, `return` de la evidencia).
 
 ### Ingesta — figuras
+- **Re-revisión humana de 14 papers y reproceso con `--rehacer`**: los 14 que se habían auto-aprobado
+  (sin checkpoint) se revisaron a mano en el editor de figuras (correcciones de agrupación, imágenes
+  añadidas, pies corregidos) y se re-describieron con `reprocesar_menciones.py --rehacer` (nuevo flag:
+  redescribe los stems dados aunque estén en el registro). 14/14 sin avisos; Qdrant re-indexada.
+- **`_limpiar_caption` también quita enlaces markdown del pie**: marker a veces deja `[texto](#ancla)`
+  y brackets escapados (`\[6\]`) en el pie; ahora se colapsan a `texto`/`[6]` antes de mandarlo a Sonnet.
+- **Pies con símbolos matemáticos OCR-eados por marker**: se corrigen a mano en el editor (p.ej.
+  Hoek-Brown 2018 Fig. 5, `σci/|σt|` que marker leyó `sci/jstj`). Detalle en `NOTAS_TECNICAS.md`.
+- **Reproceso completo del corpus con las menciones**: re-descritas las ~528 figuras de los 42 papers
+  (Perello ya venía con menciones desde su ingesta) vía `reprocesar_menciones.py` (reanudable, con
+  chequeo de completitud y auto-aprobación del checkpoint para papers ya aprobados). 41/41 sin avisos;
+  ~$8 de crédito Bedrock. 14 papers sin checkpoint humano previo quedaron auto-aprobados (para ojear su
+  `_figuras_revision.html`). Colección Qdrant re-indexada (2476 puntos).
 - **Menciones distantes en la descripción de figuras**: `describir_figuras.py` ahora recolecta las
   oraciones de TODO el paper que citan cada figura por número ("…como muestra la Fig. 6…", a menudo
   lejos del pie, en Discusión/Resultados donde el autor dice qué concluir) y las pasa a Sonnet como

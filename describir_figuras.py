@@ -72,8 +72,12 @@ _HTML_TAG = re.compile(r"</?\w+[^>]*>")
 
 
 def _limpiar_caption(texto: str) -> str:
-    """Quita anclas/etiquetas HTML residuales de marker y normaliza espacios."""
-    return re.sub(r"\s+", " ", _HTML_TAG.sub("", texto or "")).strip()
+    """Quita etiquetas HTML y ENLACES markdown residuales de marker del pie de figura
+    ('From [\\[6\\]](#page-11-5)' → 'From [6]'), des-escapa brackets y normaliza espacios."""
+    t = _HTML_TAG.sub("", texto or "")
+    t = re.sub(r"\[((?:[^\[\]]|\\.)*)\]\([^)]*\)", r"\1", t)   # [texto](ancla) → texto
+    t = t.replace("\\", "")                                     # brackets escapados de marker
+    return re.sub(r"\s+", " ", t).strip()
 
 
 def _num_de_caption(caption: str):
