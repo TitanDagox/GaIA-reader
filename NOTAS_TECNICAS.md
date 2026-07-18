@@ -65,7 +65,24 @@ de marker con el motor `render()` (KaTeX + figuras vía `/figura`, reescribiendo
 Endpoint `GET /md?doc=`. Botón `▦ PDF ⇄ ▤ Texto` para el original; sin `.md` cae al PDF. **Clic en una
 cita inline `[n]`** (`cargarLector(f.source, {resaltar|img})`) carga el `.md` de esa fuente y hace
 scroll+resalta el pasaje (match normalizado sobre bloques `p/li/td/h*`) o la figura. El scroll va en
-`setTimeout` (rAF se congela con la pestaña en segundo plano). **Estado vacío del modo cuaderno =
+`setTimeout` (rAF se congela con la pestaña en segundo plano).
+
+> **Bug resuelto (2026-07-18): la cita a veces no resaltaba y saltaba al inicio del `.md`.**
+> `resaltarPasaje()` tomaba los primeros 45 chars normalizados del texto guardado del chunk y buscaba
+> ese prefijo dentro del `textContent` de un bloque del DOM. Pero el `texto`/`preview` del chunk conserva
+> **marcado crudo de marker que NO sobrevive al render**: anclas de página `<span id="page-N-0"></span>`
+> (marker las inserta al inicio de cada página, ~11 en Cai 2004), `<sup>`, imágenes `![](…)`, links
+> `[t](u)` y math `$…$` (que `render()` convierte en KaTeX, sin texto plano). Cuando esa basura caía en
+> los primeros ~45 chars, el prefijo normalizado ("span id page 5 0 …") no existía en el DOM → no había
+> match → `scrollTop=0` **en silencio** (parecía intermitente: fallaba solo cuando el chunk citado abría
+> justo en un salto de página, una fórmula o un link). Medido: **9 de 34 chunks de texto** de Cai 2004
+> fallaban. Fix (frontend, sin re-indexar): `_limpiaMarcado()` quita ese marcado igual que el render, y
+> el match ya no usa un prefijo fijo sino **ventanas de ~8 palabras desde varios offsets** (0,3,8,15,25),
+> así una ventana más adentro empareja aunque el arranque siga sucio → 0/34. **Medido en todo el corpus
+> (42 papers, 1774 chunks de texto): 240 fallos (14%) → 6 (0.3%).** Los 6 residuales son front-matter
+> (pie de revista "journal homepage:", listas de autores con afiliaciones, bloques de keywords) y una
+> línea de OCR corrupto (Hoek-Brown 2018) — bloques que casi nunca se citan como evidencia; no se
+> persiguen a propósito (emparejar tokens cortos saltaría al párrafo equivocado, peor que ir arriba). **Estado vacío del modo cuaderno =
 portada** (`mostrarPortada()`): tarjetas por paper (autor-año + conteos que da `/documentos`); clic =
 `seleccionarDoc()`. El `<select>` de documento acorta nombres largos con elipsis a la mitad
 (`etiquetaDoc`, ver 2026-07-17) porque el popup nativo no es acotable por CSS.

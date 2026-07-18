@@ -26,6 +26,11 @@ se etiquetará `v1.0` cuando el repositorio se haga público. Lo más reciente v
 - **Marcadores `[[FIG:…]]` mal formados ya no se filtran**: si el modelo escribe texto en vez del N de
   Fuente (`[[FIG:<doc> — Figure 5]]`), se resuelve la figura por documento+número si está entre las
   fuentes, y si no, se borra el marcador (nunca queda texto crudo). Detalle en `NOTAS_TECNICAS.md`.
+- **Fix: clic en cita a veces no resaltaba y saltaba al inicio del `.md`**: `resaltarPasaje()` comparaba
+  los primeros 45 chars del chunk contra el DOM, pero el texto guardado conserva marcado crudo de marker
+  (anclas `<span id="page-N">`, `<sup>`, imágenes, links `[t](u)`, math `$…$`) que no sobrevive al render.
+  Ahora limpia ese marcado y prueba ventanas de ~8 palabras desde varios offsets. Medido en Cai 2004:
+  9/34 chunks fallaban → 0/34. Detalle en `NOTAS_TECNICAS.md`.
 
 ## 2026-07-17
 

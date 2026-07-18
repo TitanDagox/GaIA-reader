@@ -1613,11 +1613,31 @@ const _normLec = s => (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,
   .replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
 function _destello(el){ el.classList.remove("pasaje-hit"); void el.offsetWidth; el.classList.add("pasaje-hit");
   setTimeout(()=>el.classList.remove("pasaje-hit"),2600); }
+// El texto guardado del chunk conserva marcado crudo de marker (anclas de página
+// <span id="page-N">, <sup>, imágenes, links [t](u), math $…$) que NO sobrevive al
+// render → hay que quitarlo para que empareje con el textContent del DOM.
+function _limpiaMarcado(s){
+  return (s||"")
+    .replace(/\$\$[\s\S]*?\$\$/g," ").replace(/\$[^$\n]*?\$/g," ")  // math → KaTeX (no textual)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g," ")                            // imágenes
+    .replace(/\[([^\]]*)\]\([^)]*\)/g,"$1")                          // links → su texto
+    .replace(/<[^>]+>/g," ")                                         // tags HTML (spans de página, sup)
+    .replace(/\\([*_$~])/g,"$1");                                    // escapes
+}
 function resaltarPasaje(cont, texto){
-  const obj=_normLec(texto).slice(0,45);
-  if(obj.length<10){ cont.scrollTop=0; return false; }
-  for(const b of cont.querySelectorAll("p,li,td,th,h1,h2,h3,h4,blockquote")){
-    if(_normLec(b.textContent).includes(obj)){ b.scrollIntoView({block:"center"}); _destello(b); return true; }
+  // ventanas de ~8 palabras desde varios offsets: si el inicio del chunk trae
+  // basura (ancla de página, sup, link roto), una ventana más adentro sí empareja.
+  const pal=_normLec(_limpiaMarcado(texto)).split(" ").filter(Boolean);
+  if(pal.length<3){ cont.scrollTop=0; return false; }
+  const bloques=[...cont.querySelectorAll("p,li,td,th,h1,h2,h3,h4,blockquote")];
+  const normB=bloques.map(b=>_normLec(b.textContent));
+  for(const off of [0,3,8,15,25]){
+    if(off+3>pal.length) break;
+    const win=pal.slice(off, off+8).join(" ");
+    if(win.length<12) continue;
+    for(let i=0;i<bloques.length;i++){
+      if(normB[i].includes(win)){ bloques[i].scrollIntoView({block:"center"}); _destello(bloques[i]); return true; }
+    }
   }
   cont.scrollTop=0; return false;   // no encontrado → arriba (nunca rompe)
 }
