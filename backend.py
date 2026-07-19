@@ -466,6 +466,8 @@ class AskReq(BaseModel):
     attach_images: bool = True
     doc: str | None = None            # limitar a un documento (opcional)
     docs: list | None = None          # limitar a un conjunto de fuentes (cuaderno)
+    doc_foco: str | None = None       # Investigación: paper que el lector tiene abierto. NO restringe
+                                      # el alcance; es una pista para anclar "este paper"/"el paper".
     web_fallback: bool | None = None  # override del .env
     historial: list | None = None     # turnos previos [{q, a}] para dar memoria conversacional
     imagenes_usuario: list | None = None  # capturas adjuntadas en el chat (dataURLs); p.ej.
@@ -1248,6 +1250,14 @@ def ask(req: AskReq, authorization: str | None = Header(default=None)):
                 try:
                     scope = _scope_sources(req.doc, req.docs)
                     sys_ag = SYS_AGENTE + "\n\n=== BIBLIOTECA EN ALCANCE ===\n" + mapa_cuaderno(scope)
+                    if req.doc_foco and req.doc_foco in scope:
+                        sys_ag += (
+                            "\n\n=== EN FOCO (lectura actual) ===\nEl lector tiene abierto ahora mismo el "
+                            f"paper «{req.doc_foco}». Es el punto de partida y el sujeto por defecto cuando "
+                            "la pregunta dice «este paper», «el paper», «el documento» o «acá». Deja que la "
+                            "pregunta marque la amplitud: si pide comparar con papers concretos, cíñete a "
+                            "esos y no arrastres otros de la biblioteca; solo si la pregunta es abierta "
+                            "(p.ej. «qué otros métodos existen») explora libremente el resto del alcance.")
                     gen_ag = AGENT_ADAPTERS[provider](sys_ag, req.query, scope, model)
                     evidencia = ""
                     while True:

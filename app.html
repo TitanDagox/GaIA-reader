@@ -358,7 +358,8 @@ button{font:inherit; color:inherit}
 
 .pregunta{align-self:flex-end; max-width:74%;
   font-family:var(--f-mono); font-size:.78rem; line-height:1.5;
-  background:var(--ink); color:var(--sheet); padding:.55rem .8rem}
+  background:var(--ink); color:var(--sheet); padding:.55rem .8rem;
+  white-space:pre-wrap; overflow-wrap:break-word}
 .pregunta .rotulo{display:block; font-size:.55rem; letter-spacing:.16em;
   color:#9a9b91; margin-bottom:.2rem}
 
@@ -371,7 +372,7 @@ button{font:inherit; color:inherit}
 .ficha--web{border-left:4px solid var(--intrusivo)}
 .ficha h4{font-family:var(--f-rotulo); font-weight:700; font-size:1.02rem;
   letter-spacing:.02em; margin:0 0 .4rem; padding-right:3rem}
-.cuerpo{font-size:.92rem}
+.cuerpo{font-size:.92rem; overflow-wrap:break-word}
 .cuerpo p{margin:.45rem 0}
 .cuerpo h1,.cuerpo h2,.cuerpo h3,.cuerpo h4{
   font-family:var(--f-rotulo); font-weight:600; font-size:.95rem;
@@ -387,6 +388,10 @@ button{font:inherit; color:inherit}
 .cuerpo th{background:var(--sheet); font-family:var(--f-rotulo); font-weight:600;
   text-align:left; letter-spacing:.01em}
 .cuerpo code{font-family:var(--f-mono); font-size:.82em; background:var(--code-bg); padding:.05em .3em}
+.cuerpo pre{background:var(--code-bg); font-family:var(--f-mono); font-size:.8em; line-height:1.45;
+  padding:.55rem .7rem; margin:.55rem 0; max-width:100%; overflow-x:auto}
+.cuerpo pre code{background:none; padding:0; font-size:1em}
+.cuerpo .katex-display{overflow-x:auto; overflow-y:hidden; padding:.2rem 0; max-width:100%}
 .aviso-web{font-family:var(--f-mono); font-size:.66rem; color:var(--intrusivo);
   margin-bottom:.45rem; letter-spacing:.03em}
 
@@ -2018,7 +2023,7 @@ async function enviar(){
   if(!CONV.id) CONV={id:crypto.randomUUID(), doc:DOC, cuaderno:CUAD.id, titulo:q.slice(0,60), ts:Date.now(), turnos:[]};
   pintarPregunta(q + (adjuntas.length ? `  📎×${adjuntas.length}` : ""));
   const {art,cuerpo,aviso}=nuevaFicha(++N_RESP, true);
-  $("btnEnviar").disabled=true; $("btnStop").hidden=false; controller=new AbortController();
+  $("btnEnviar").hidden=true; $("btnStop").hidden=false; controller=new AbortController();
 
   let texto="", fuentes=[], web=null, thoughtText="", huboError=false;
   let detailsEl=null, thoughtBodyEl=null;
@@ -2026,8 +2031,13 @@ async function enviar(){
   try{
     const m=motorSel();
     const historial=(CONV.turnos||[]).slice(-4).map(t=>({q:t.q, a:(t.a||"").slice(0,900)}));
-    // Alcance del RAG: un doc concreto, si no el cuaderno activo, si no todo el corpus.
-    const scope = DOC ? {doc:DOC} : (CUAD.id ? {docs:CUAD.docs} : {});
+    // Alcance del RAG. Consulta: el paper abierto (lectura enfocada). Investigación: todo el
+    // cuaderno (cruza papers), ignorando el candado de un solo doc; si no hay cuaderno, el corpus.
+    // En Investigación, `doc_foco` va como PISTA (paper que el lector tiene abierto) para anclar
+    // "este paper"/"el paper" sin restringir la búsqueda; el modelo decide la amplitud según la pregunta.
+    const scope = (DEEP && m.agentic_capaz)
+      ? {...(CUAD.id ? {docs:CUAD.docs} : {}), ...(DOC ? {doc_foco:DOC} : {})}
+      : (DOC ? {doc:DOC} : (CUAD.id ? {docs:CUAD.docs} : {}));
     const r=await fetch("/ask",{method:"POST",signal:controller.signal,
       headers:{...HDRS,"Content-Type":"application/json"},
       body:JSON.stringify({query:q, provider:m.provider||null, model:m.model||null,
@@ -2089,7 +2099,7 @@ async function enviar(){
     if(err.name==="AbortError"){ texto += "\n\n*(detenido)*"; }
     else{ texto += `\n\n**Error:** ${err.message}`; huboError=true; }
   }
-  finally{ controller=null; $("btnEnviar").disabled=false; $("btnStop").hidden=true; }
+  finally{ controller=null; $("btnEnviar").hidden=false; $("btnStop").hidden=true; }
 
   if(detailsEl){                       // el pensamiento en vivo terminó: para la animación y reetiqueta
     detailsEl.classList.remove("pensando");

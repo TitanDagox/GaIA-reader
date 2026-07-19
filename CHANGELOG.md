@@ -8,6 +8,29 @@ se etiquetará `v1.0` cuando el repositorio se haga público. Lo más reciente v
 
 ## 2026-07-18
 
+### App — Investigación busca en todo el cuaderno + swap de botón enviar/stop
+- **Investigación profunda ya cruza papers**: con un doc abierto en el lector, el botón Investigación
+  amplía el alcance al cuaderno completo (o al corpus si el selector está en "Todos"), ignorando el
+  candado de un solo doc; la Consulta normal sigue enfocada en el paper abierto. Antes, tener un paper
+  abierto encerraba también a Investigación en ese único paper (por eso no encontraba papers hermanos
+  como "Quantification of the GSI Chart (Hoek 2013)" estando ya indexado). Solo frontend (`app.html`).
+- **Botón de envío/stop no se muestran a la vez**: mientras el modelo piensa/redacta, el botón enviar
+  se oculta y en su lugar aparece el de detener (antes salía enviar en gris + stop juntos).
+- **Investigación ancla en el paper abierto (`doc_foco`)**: el frontend manda el paper que el lector
+  tiene abierto como pista (no restringe el alcance); el prompt del agente lo usa como sujeto por
+  defecto de "este paper"/"el paper". Así "compárame este paper con Hoek 2013" se ciñe a esos dos y no
+  arrastra papers hermanos (p.ej. Li 2026), mientras que una pregunta abierta ("qué otros métodos de
+  GSI existen") sí explora todo el cuaderno. La amplitud la decide el modelo según la pregunta, sin
+  heurísticas de palabras clave. Toca `app.html` y `backend.py` (`AskReq.doc_foco` + Fase A).
+
+### App — fixes de UX en el chat: desborde y saltos de línea
+- **Fórmulas y bloques `<pre>` ya no se salen del recuadro**: `.cuerpo pre` y `.cuerpo .katex-display`
+  hacen scroll horizontal interno (`overflow-x:auto`, `max-width:100%`); `.cuerpo` con
+  `overflow-wrap:break-word` corta palabras kilométricas. Antes la regla de KaTeX estaba scopeada solo
+  al lector (`.md-reader`) y `<pre>` no tenía estilo, así que rompían el ancho del hilo. Solo CSS.
+- **El prompt respeta los saltos de línea (shift+Enter)**: `.pregunta` con `white-space:pre-wrap` — antes
+  se mostraba todo junto aunque el textarea sí insertaba los saltos.
+
 ### App — lector central del `.md` y portada del cuaderno
 - **El panel central pasa de "visor de PDF" a LECTOR del `.md`**: renderiza el markdown de marker
   (fórmulas en KaTeX, figuras vía `/figura`, texto seleccionable) con el mismo motor `render()` del
