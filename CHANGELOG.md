@@ -6,6 +6,68 @@ se etiquetará `v1.0` cuando el repositorio se haga público. Lo más reciente v
 > Convención: cada cambio hecho se anota aquí en una línea. El *porqué* y el diseño vivo están en
 > `CONTEXTO.md`; el detalle técnico y los bugs resueltos, en `NOTAS_TECNICAS.md`.
 
+## 2026-07-21
+
+### Motores de chat — MiniMax M3 (razonamiento) y Bedrock fuera del selector
+- **MiniMax M3 añadido** como motor de chat vía Ollama Cloud (`minimax-m3:cloud`, configurable con
+  `OLLAMA_REASON_MODEL`). Etiqueta *"MiniMax M3 · razonamiento"*. En una prueba de Investigación
+  cross-paper (GSI/Hoek-Brown) razonó **más profundo que DeepSeek V4 Flash** (extrajo fórmulas de Cai
+  2004 que Flash omitió; mejor manejo del caso de relleno arcilloso), a costa de ~3x más lento y
+  verboso. Contras: puede filtrar algún token en chino → conviene reforzar "solo español" en `sys_chat`.
+- **Investigación habilitada para Ollama** (`AGENT_ADAPTERS += "ollama"`, usa `_investigar_ollama`
+  no-streaming): validado con 24 tool-calls limpios de MiniMax.
+- **Bedrock (Claude Sonnet 4.6) fuera del selector de chat**: se reserva SOLO para describir figuras
+  al ingerir (`describir_figuras.py`). Sus keys siguen en el panel de config.
+
+### Orden de lectura — Esperanza (Perello 2004) reconstruido
+- **Fix del desorden de columnas de marker** en `md/…Esperanza…(Perello et al. 2004).md`: marker
+  entrelazó las dos columnas del PDF (páginas 9-16), dejando frases partidas, títulos sueltos y
+  ruido de ejes de figura. Reconstruido con orden geométrico de PyMuPDF (por columnas) reusando
+  títulos y refs de figura de marker; re-`secciones` + re-`indexar` (69 puntos). Backup del original
+  en `…(Perello et al. 2004).md.marker_bak`. Detalle y método → `NOTAS_TECNICAS.md`.
+- **Barrido del corpus**: el problema resultó ser un **outlier** de Esperanza; ningún otro paper lo
+  sufre a nivel apreciable (verificado con detector objetivo PyMuPDF-vs-marker + ojo). El informe
+  delegado a Antigravity (`Hallazgos.md`) resultó **no confiable** (evidencia alucinada) — no usar.
+
+## 2026-07-20
+
+### Investigación/Chat — fidelidad de fórmulas, anti-truncación y más profundidad
+- **Anti-truncación en respuestas largas**: `CHAT_MAX_TOKENS=16384` en `.env` (era 8192; con
+  `thinking` los tokens de razonamiento agotaban el cupo y cortaban el texto a mitad de tabla).
+  No aplica al motor `claude_cli` (Claude Code gestiona su propio tope de salida).
+- **Fidelidad de fórmulas** en `sys_chat()`: instrucción de copiar coeficientes TEXTUALMENTE (no
+  "simetrizar" ni redondear; si no está en el CONTEXTO, decirlo). Nace del error `GSI=JCond89/2` vs
+  el correcto `GSI=1.5·JCond89+RQD/2` (Hoek 2013). Solo en `sys_chat`, no en los prompts JSON.
+- **Más profundidad panorámica**: `AGENT_MAX_ROUNDS` 5→10 — más vueltas de herramientas para
+  preguntas que cruzan muchos papers (validado: 13 docs inspeccionados, 6 secciones leídas). El
+  bucle corta apenas el modelo deja de pedir herramientas → sin costo en preguntas simples. Aplica a
+  DeepSeek/Gemini/Ollama; el motor `claude_cli` NO lo usa (acota sus propias vueltas).
+
+### Chat — motor por SUSCRIPCIÓN vía Claude Code CLI (Fase 1)
+- **Nuevo proveedor `claude_cli`**: motor de chat que delega en el CLI de Claude Code headless
+  (`claude -p … --system-prompt … --output-format json`, prompt del usuario por STDIN para no chocar
+  con el tope de argumentos de Windows). Usa la **suscripción Pro/Max** del usuario, no una API key
+  (el coste sale de la cuota del plan). Se auto-detecta el binario y aparece en el selector como
+  "Claude Sonnet · tu suscripción"; desactivable con `CLAUDE_CLI_ENABLED=0`. Chat puro (herramientas
+  de código desactivadas). **Streaming token-a-token** vía `stream-json` (base compartida
+  `_claude_cli_run`: STDIN por hilo alimentador + guardián de timeout).
+
+### Investigación por SUSCRIPCIÓN vía MCP (Fase 2)
+- **`claude_cli` ahora hace Investigación agéntica** (fiel a la semántica, no léxica): nuevo servidor
+  MCP `mcp_corpus.py` expone tus 3 herramientas (buscar_en_corpus/ver_esquema/leer_seccion), que
+  llaman al nuevo endpoint `/agent_tool` (envuelve `_ejecutar_tool` → texto idéntico al de
+  DeepSeek/Gemini). El adaptador `_investigar_claude_cli` corre `claude -p --mcp-config …`, parsea
+  los eventos stream-json (tool_use → trazas en vivo; tool_result → evidencia) y devuelve
+  `(evidencia, trazas)`, mismo contrato que los otros adaptadores → se enchufa en `AGENT_ADAPTERS` y
+  el botón se auto-activa (`agentic_capaz`). Dep nueva: `mcp`. Pendiente: Codex.
+
+### Quiz — figura rota en preguntas
+- **Fix imagen rota en el quiz**: el LLM ponía en `figura` una referencia ("Fig. 3", "3", el nombre
+  sin extensión) en vez del archivo exacto → `/figura` 404 → `<img>` roto. `generar_quiz` ahora
+  normaliza el campo contra los archivos reales (`_mapa_figuras`/`_resolver_figura`): recupera el
+  archivo por nº de figura si puede, o lo deja en `null`. Red de seguridad en el front: `onerror`
+  oculta el recuadro.
+
 ## 2026-07-18
 
 ### App — Investigación busca en todo el cuaderno + swap de botón enviar/stop

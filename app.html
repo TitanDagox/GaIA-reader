@@ -1538,7 +1538,7 @@ function pintarDeep(){
   b.disabled = !m.agentic_capaz;
   b.title = m.agentic_capaz
     ? "Investigación profunda: el modelo indaga tu biblioteca con herramientas antes de responder (más lento, mejor para comparar papers)"
-    : "Investigación profunda no disponible en este motor (habilitada en DeepSeek y Gemini)";
+    : "Investigación profunda no disponible en este motor (habilitada en DeepSeek, Gemini y Claude Code)";
   b.setAttribute("aria-pressed", (DEEP && m.agentic_capaz) ? "true" : "false");
 }
 $("btnThink").addEventListener("click", ()=>{
@@ -2535,7 +2535,7 @@ function pintarPreguntaActual() {
   const figBox = $("quizPreguntaFig");
   if (figBox) {
     if (preg.figura) {
-      figBox.innerHTML = `<img src="/figura?doc=${encodeURIComponent(DOC)}&img=${encodeURIComponent(preg.figura)}" alt="figura de pregunta">`;
+      figBox.innerHTML = `<img src="/figura?doc=${encodeURIComponent(DOC)}&img=${encodeURIComponent(preg.figura)}" alt="figura de pregunta" onerror="this.parentElement.hidden=true">`;
       figBox.hidden = false;
     } else {
       figBox.hidden = true;

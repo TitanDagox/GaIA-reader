@@ -202,6 +202,36 @@ la base vectorial).
 
 ---
 
+## Actualizar la app (sin perder tu corpus)
+
+Si ya tienes GaIA funcionando —con papers ingeridos y tu base vectorial— y quieres traer una versión
+nueva del código desde GitHub, **tus datos están a salvo**: todo lo que generas en tu máquina está
+fuera del control de versiones (ver `.gitignore`), así que un `git pull` **solo actualiza el código**,
+nunca borra ni sobrescribe:
+
+- **Intactos** (no trackeados): `qdrant_data/` (tus puntos indexados), `raw/`, `md/`, `outlines/`,
+  `descripciones/`, `embed_manifest.json`, `cuadernos.json`, `conversaciones/`, `perfil.json` y tu `.env`.
+- **Se actualizan**: el código (`backend.py`, `app.html`, scripts de ingesta), `requirements.txt`, docs.
+
+Pasos:
+```bash
+# 1. (Solo si editaste archivos de código a mano) guarda tus cambios locales:
+git stash
+# 2. Trae la versión nueva:
+git pull
+# 3. Por si cambiaron dependencias:
+pip install -r requirements.txt
+# 4. Reinicia el servidor (Ctrl+C y vuelve a arrancar uvicorn / run.bat).
+```
+
+> **Reindexar solo si el CHANGELOG lo pide.** Un cambio de código normal (p.ej. un motor de chat nuevo)
+> **no** requiere tocar tu base vectorial. Solo si una entrada del `CHANGELOG.md` avisa que cambió el
+> formato de indexación o el modelo de embeddings tendrías que re-ingerir; y podrías hacerlo desde tus
+> propios PDFs en `raw/` sin depender de nadie. **Nunca** cambies el modelo de embeddings de un corpus
+> ya hecho: está *casado* con el que registra `embed_manifest.json` (el backend aborta si no coincide).
+
+---
+
 ## Importante
 
 - **Este repositorio no incluye papers.** Por derechos de autor, la carpeta `raw/` (PDFs) y la base de

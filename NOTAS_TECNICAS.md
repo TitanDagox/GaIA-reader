@@ -155,6 +155,46 @@ El panel derecho tiene **dos pestañas ◎ CONSULTA / ❓ QUIZ** (la pestaña ac
 La revisión/recorte de figuras se hace SOLO con `revisar_figuras.py` (puerto 8902) durante la ingesta;
 el botón in-app "▦ figuras" se eliminó (el modal quedó como código muerto, inofensivo).
 
+### Motor por SUSCRIPCIÓN (Claude Code CLI) + Investigación vía MCP (desde 2026-07-20)
+Proveedor `claude_cli`: usa la **suscripción Pro/Max** del usuario (cuota del plan), no una API key.
+Pensado para amigos que ya tienen Claude Code — así usan la app sin configurar keys.
+- **Requisitos (una vez):** CLI instalado (`npm i -g @anthropic-ai/claude-code`) **y** sesión iniciada
+  (`claude` → /login, OAuth en navegador). OJO: la **app de escritorio de Claude NO comparte sesión
+  con el CLI** — son logins separados; se necesita el CLI, no basta la app.
+- **Detección:** el motor aparece en el selector solo si `_claude_cli_bin()` encuentra el binario
+  (`%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe`, o `which claude`).
+  Desactivable con `CLAUDE_CLI_ENABLED=0`.
+- **Chat:** `_claude_cli_run` lanza `claude -p … --output-format stream-json --include-partial-messages
+  --verbose`, prompt del usuario por **STDIN** (hilo alimentador → evita deadlock y el tope de argumentos
+  de Windows con contextos RAG grandes), system por `--system-prompt`, herramientas de código
+  desactivadas (`--disallowedTools`). Los `text_delta` dan el streaming token-a-token. Guardián de
+  timeout que mata el proceso.
+- **Investigación (Fase A):** `_investigar_claude_cli` reusa `_claude_cli_run` con `--mcp-config` →
+  lanza `mcp_corpus.py` (servidor MCP stdio, FastMCP) que expone las 3 herramientas del corpus. El MCP
+  **no toca Qdrant** (lo bloquea el backend): llama al endpoint `/agent_tool` (envuelve `_ejecutar_tool`
+  → texto idéntico al de DeepSeek/Gemini). El alcance/token/URL van por env en un mcp-config temporal.
+  Se parsean los eventos stream-json: `tool_use` (name `mcp__corpus__*`) → traza en vivo (`_paso_legible`);
+  `tool_result` → evidencia. Devuelve `(evidencia, trazas)` → mismo contrato que los otros adaptadores,
+  se enchufa en `AGENT_ADAPTERS` y el botón se auto-activa vía `agentic_capaz`.
+- **Costo:** cada Investigación son **DOS** pasadas de suscripción (Fase A agéntica + Fase B redacción),
+  como el resto de motores (fidelidad/consistencia con la arquitectura de 2 fases). Sin visión (solo
+  texto) y sin thinking por esta vía en v1.
+- **Pendiente:** Codex (CLI de ChatGPT, mismo patrón); streaming de la Investigación en una sola pasada.
+
+### Profundidad de la Investigación agéntica (AGENT_MAX_ROUNDS)
+`AGENT_MAX_ROUNDS` (backend.py) = tope de vueltas del bucle de herramientas de la **Fase A
+hand-rolled** (DeepSeek/Gemini/Ollama). Cada vuelta = 1 turno del modelo (que puede disparar varias
+tool-calls en paralelo) → observar. Subido **5→10 el 2026-07-20**: con 5 no alcanzaba a cubrir
+amplitud+profundidad en preguntas panorámicas (11-15 papers); con 10 sí (validado: 13 docs, 6
+secciones). Es un cambio **seguro**: el bucle corta apenas el modelo deja de pedir herramientas
+(`if not tcs: break`), así que preguntas simples no pagan el techo más alto. Costo real solo en las
+corridas profundas (el historial `messages` crece cada vuelta → input mayor por ronda). Diagnóstico
+si falta cobertura: mirar trazas — si toca las 10 vueltas con tools pendientes, subir a 12; si para
+antes pero omite papers, es prompt-side (reforzar `SYS_AGENTE`), no más vueltas.
+**OJO: `AGENT_MAX_ROUNDS` NO rige el motor `claude_cli`** — su `_investigar_claude_cli` ignora el
+parámetro (Claude Code acota sus propias vueltas). Para más profundidad del CLI, la palanca es
+`SYS_AGENTE`/`--effort`, no este tope.
+
 ---
 
 ## 3. Verificar que un PDF quedó bien indexado
@@ -301,3 +341,21 @@ Revisar también `outlines/<doc>.md` (resumen por secciones) a ojo.
    El clic hace lo correcto (abre la Fuente citada); el LECTOR + el tooltip (nombre del paper) son la
    herramienta para **verificar** y cazar la mala cita. Mitigable endureciendo el prompt de citación,
    no eliminable. Es, de hecho, el valor del RAG con evidencia a la vista.
+24. **marker entrelaza las dos columnas (orden de lectura roto)** (2026-07-21). En el PDF de Esperanza
+   (Perello 2004, *Economic Geology*, 2 columnas) el modelo de reading-order de marker mezcló las
+   columnas de las páginas 9-16: frases partidas a mitad de palabra con su cola lejos, títulos de
+   sección sueltos y desprendidos de su cuerpo, y etiquetas/ejes de figura colados como texto (p.ej.
+   `alteration (see below).` huérfano bajo *Structure*; ejes de la Fig. 11 `Au ppm`/`K = POTASSIC`
+   en medio de la prosa). Es un **outlier raro**, no sistémico. **Remedio** (script en scratchpad,
+   no versionado): reconstruir el `.md` con el orden **geométrico de PyMuPDF por columnas** (por
+   página: bloques con punto medio x<ancho/2 = col. izq. ordenados por y, luego los de x≥ancho/2, y
+   `-\n`→unir palabra cortada), **reusando de marker** los títulos (match exacto + run-in ≥11 chars)
+   y las refs `![](_page_N_…)` (reinyectadas antes de su pie "FIG. N"); ruido de figura descartado
+   por bloque corto (<10 palabras no-título/no-pie) o ratio de MAYÚSCULAS >0.35. Luego re-`secciones`
+   (borrar antes `outlines/_cache_<stem>/` para refrescar resúmenes) + re-`indexar` (backend parado).
+   Tablas del `.md` quedan como filas de texto plano (las autoritativas son las de `_tablas.jsonl`).
+   **Verificación**: detector objetivo de inversiones PyMuPDF-vs-marker; OJO, es **señal débil**
+   (Esperanza-roto marcó solo 3.1%, se infla con furniture repetido tipo pie de cita) → confirmar a
+   ojo, no solo por el número. **Lección de delegación**: el barrido pedido a Antigravity
+   (`Hallazgos.md`) traía **evidencia alucinada** (citas y nº de línea inventados; papers limpios
+   marcados "Alta") — validar siempre lo que devuelve un sub-agente antes de actuar.

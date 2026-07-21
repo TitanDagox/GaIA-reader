@@ -36,6 +36,9 @@ import time
 import uuid
 import base64
 import shutil
+import subprocess
+import tempfile
+import threading
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -79,6 +82,7 @@ CHAT_PROVIDER = os.environ.get("CHAT_PROVIDER", "gemini").lower()
 OLLAMA_URL = os.environ.get("OLLAMA_CLOUD_URL", "https://ollama.com")
 OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:31b-cloud")
+OLLAMA_REASON_MODEL = os.environ.get("OLLAMA_REASON_MODEL", "minimax-m3:cloud")
 GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-3.5-flash")
 DEEPSEEK_URL = os.environ.get("DEEPSEEK_URL", "https://api.deepseek.com")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
@@ -86,6 +90,20 @@ DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
 DEEPSEEK_REASONING_EFFORT = os.environ.get("DEEPSEEK_REASONING_EFFORT", "high")  # high|max
 # Techo de salida del chat/quiz. 4096 truncaba quizzes grandes (10 MC ricas) → JSON cortado.
 CHAT_MAX_TOKENS = int(os.environ.get("CHAT_MAX_TOKENS", "8192"))
+
+# ── Claude Code CLI: motor de chat que usa la SUSCRIPCIÓN del usuario (no una API key) ──
+# Delega en el CLI de Claude Code en modo headless (`claude -p`). El coste sale de la cuota del
+# plan Pro/Max, NO de facturación por token. Requiere el CLI instalado (npm i -g
+# @anthropic-ai/claude-code) y sesión iniciada (`claude` → /login). El motor aparece en el selector
+# SOLO si se detecta el binario (ver _motores). Desactivable con CLAUDE_CLI_ENABLED=0.
+CLAUDE_CLI_MODEL = os.environ.get("CLAUDE_CLI_MODEL", "sonnet")
+CLAUDE_CLI_TIMEOUT = int(os.environ.get("CLAUDE_CLI_TIMEOUT", "180"))
+CLAUDE_CLI_ENABLED = os.environ.get("CLAUDE_CLI_ENABLED", "1").lower() not in ("0", "false", "no")
+# Investigación con el motor por suscripción: el CLI indaga el corpus vía este servidor MCP, que a
+# su vez llama a /agent_tool de ESTE backend (SELF_URL). Timeout más largo (bucle agéntico).
+MCP_CORPUS_SERVER = str(BASE / "mcp_corpus.py")
+SELF_URL = os.environ.get("SELF_URL", "http://127.0.0.1:8901")
+CLAUDE_CLI_AGENT_TIMEOUT = int(os.environ.get("CLAUDE_CLI_AGENT_TIMEOUT", "420"))
 
 from anthropic import AnthropicBedrock
 BEDROCK_MODEL = os.environ.get("BEDROCK_MODEL", "us.anthropic.claude-sonnet-4-6")
@@ -392,7 +410,97 @@ def _chat_bedrock(system, user_text, images, model):
             yield text
 
 
-PROVIDERS = {"ollama": _chat_ollama, "gemini": _chat_gemini, "deepseek": _chat_deepseek, "bedrock": _chat_bedrock}
+def _claude_cli_bin() -> str | None:
+    """Ejecutable del CLI de Claude Code, o None si no está instalado. Prefiere el .exe nativo del
+    install global de npm (subprocess lo lanza sin shell); cae a PATH en macOS/Linux u otros installs."""
+    appdata = os.environ.get("APPDATA")               # Windows: %APPDATA%\npm\node_modules\...
+    if appdata:
+        exe = Path(appdata) / "npm" / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+        if exe.exists():
+            return str(exe)
+    return shutil.which("claude")
+
+
+def _claude_cli_run(system, user_text, model, extra_args=None, timeout=None):
+    """Lanza `claude -p` en modo stream-json y GENERA los eventos JSON ya parseados (uno por línea),
+    en vivo. Base compartida por el chat y la Investigación (Fase 2). El prompt va por STDIN desde un
+    hilo alimentador (evita el deadlock write/read con contextos grandes); el system va por flag. Un
+    guardián mata el proceso si excede `timeout` (default CLAUDE_CLI_TIMEOUT; la investigación pide
+    uno más largo). `extra_args` añade flags (p.ej. --mcp-config)."""
+    timeout = timeout or CLAUDE_CLI_TIMEOUT
+    binario = _claude_cli_bin()
+    if not binario:
+        raise RuntimeError("Claude Code CLI no encontrado (instala: npm i -g @anthropic-ai/claude-code)")
+    cmd = [binario, "-p",
+           "--model", model or CLAUDE_CLI_MODEL,
+           "--system-prompt", system,
+           "--output-format", "stream-json", "--include-partial-messages", "--verbose",
+           *(extra_args or [])]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                            cwd=tempfile.gettempdir())
+    estado = {"timeout": False}
+
+    def _matar():
+        estado["timeout"] = True
+        proc.kill()
+
+    def _alimentar():                              # STDIN en un hilo: contexto grande sin deadlock
+        try:
+            proc.stdin.write(user_text)
+            proc.stdin.close()
+        except Exception:
+            pass
+
+    guardia = threading.Timer(timeout, _matar)
+    guardia.start()
+    threading.Thread(target=_alimentar, daemon=True).start()
+    try:
+        for linea in proc.stdout:
+            linea = linea.strip()
+            if not linea:
+                continue
+            try:
+                yield json.loads(linea)
+            except Exception:
+                continue
+        if estado["timeout"]:
+            raise RuntimeError(f"Claude CLI: sin respuesta en {timeout}s")
+    finally:
+        guardia.cancel()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
+
+
+def _chat_claude_cli(system, user_text, images, model):
+    """Motor de chat vía Claude Code CLI headless: usa la SUSCRIPCIÓN del usuario, no una API key.
+    GENERADOR con streaming token-a-token (formato stream-json). `images` se ignora (esta vía es solo
+    texto). Chat puro: se desactivan las herramientas de código del agente. Los errores (sin sesión,
+    timeout) se lanzan y ask()/quiz los muestran al usuario."""
+    sin_tools = ["--disallowedTools",
+                 "Bash Edit Write Read Glob Grep WebSearch WebFetch NotebookEdit TodoWrite Task"]
+    hubo_texto = False
+    err = None
+    for o in _claude_cli_run(system, user_text, model, extra_args=sin_tools):
+        t = o.get("type")
+        if t == "stream_event":
+            ev = o.get("event", {})
+            if ev.get("type") == "content_block_delta" and ev.get("delta", {}).get("type") == "text_delta":
+                txt = ev["delta"].get("text", "")
+                if txt:
+                    hubo_texto = True
+                    yield txt
+        elif t == "result" and o.get("is_error"):
+            err = o.get("result") or "error desconocido"
+    if err and not hubo_texto:
+        # p.ej. 'Not logged in · Please run /login' → guía al usuario a iniciar sesión en el CLI.
+        raise RuntimeError(f"Claude CLI: {err}")
+
+
+PROVIDERS = {"ollama": _chat_ollama, "gemini": _chat_gemini, "deepseek": _chat_deepseek,
+             "bedrock": _chat_bedrock, "claude_cli": _chat_claude_cli}
 
 def _lector_txt(p: dict) -> str:
   """'un geólogo' / 'un lector' — descripción del lector para los prompts."""
@@ -439,6 +547,11 @@ def sys_chat() -> str:
     "CITAS: al usar un fragmento del CONTEXTO, cítalo como (Fuente N) copiando el N del encabezado "
     "[Fuente N]. Incluye al menos una cita CUANDO te apoyes en el CONTEXTO (si respondes un concepto "
     "general que no está en el documento, no fuerces citas).\n"
+    "FÓRMULAS Y ECUACIONES: cuando reproduzcas una fórmula, ecuación o coeficiente numérico del "
+    "CONTEXTO, cópialo TEXTUALMENTE — no simplifiques, no 'simetrices', no redondees coeficientes. "
+    "Si el CONTEXTO dice $1.5\\,JCond_{89}$, escribe exactamente eso, NO $JCond_{89}/2$ ni otra "
+    "variante. Si no encuentras la fórmula exacta en el CONTEXTO, dilo explícitamente en vez de "
+    "reconstruirla de memoria. Los errores en coeficientes son graves para el lector.\n"
     "CITAS TEXTUALES EN ESPAÑOL: cuando transcribas literalmente un fragmento del documento y el "
     "CONTEXTO esté en inglés (u otro idioma), TRADÚCELO al español dentro de las comillas —NO lo "
     "dejes en el idioma original—. Traduce con fidelidad, conservando los términos técnicos y las "
@@ -522,10 +635,16 @@ def _motores():
         motores.append({"provider": "ollama", "model": OLLAMA_MODEL,
                         "label": "Gemma 4", "grupo": "Ollama Cloud",
                         "vision": True, "thinking_capaz": False})
-    if os.environ.get("AWS_REGION") or os.environ.get("AWS_ACCESS_KEY_ID"):
-        motores.append({"provider": "bedrock", "model": BEDROCK_MODEL,
-                        "label": "Claude Sonnet 4.6", "grupo": "Amazon Bedrock",
-                        "vision": True, "thinking_capaz": False})
+        motores.append({"provider": "ollama", "model": OLLAMA_REASON_MODEL,
+                        "label": "MiniMax M3 · razonamiento", "grupo": "Ollama Cloud",
+                        "vision": False, "thinking_capaz": False})
+    # Bedrock (Claude Sonnet 4.6) NO va al selector de chat: se reserva para DESCRIBIR FIGURAS al
+    # ingerir (describir_figuras.py, invariante de calidad). Para chat, mejor DeepSeek/MiniMax/Gemini.
+    # Claude Code CLI: aparece si el binario está instalado (usa la SUSCRIPCIÓN del usuario, no key).
+    if CLAUDE_CLI_ENABLED and _claude_cli_bin():
+        motores.append({"provider": "claude_cli", "model": CLAUDE_CLI_MODEL,
+                        "label": "Claude Sonnet · tu suscripción", "grupo": "Claude Code (suscripción)",
+                        "vision": False, "thinking_capaz": False})
     # "Investigación profunda" (Fase A): capaz si su proveedor tiene adaptador de tool-use.
     # Derivado de AGENT_ADAPTERS → se auto-activa al sumar Sonnet/Gemini/Gemma (una sola fuente).
     for m in motores:
@@ -879,7 +998,7 @@ def _dataurl_a_jpeg_b64(dataurl: str):
 # esquivamos los bugs de "streaming + tool_calls" de Gemini/Gemma). FASE B = la respuesta
 # final se transmite con los _chat_* de siempre, usando como CONTEXTO la evidencia
 # recolectada. Si la Fase A falla, ask() cae al RAG de un tiro. Off por defecto (toggle UI).
-AGENT_MAX_ROUNDS = 5          # tope de vueltas de herramientas (acota costo/latencia)
+AGENT_MAX_ROUNDS = 10         # tope de vueltas de herramientas (acota costo/latencia)
 AGENT_BUSCAR_K = 5            # resultados de texto por búsqueda dentro del bucle
 AGENT_SNIPPET = 900           # chars por resultado en el tool-result (leer_seccion da el resto)
 AGENT_SECCION_MAX = 6000      # chars máx que devuelve leer_seccion (acota tokens)
@@ -973,6 +1092,23 @@ def _ejecutar_tool(nombre: str, args: dict, scope: list) -> str:
         return f"(herramienta desconocida: {nombre})"
     except Exception as e:
         return f"(error ejecutando {nombre}: {e})"
+
+
+class AgentToolReq(BaseModel):
+    tool: str
+    args: dict = {}
+    scope: list = []
+
+
+@app.post("/agent_tool")
+def agent_tool_ep(req: AgentToolReq, authorization: str | None = Header(default=None)):
+    """Ejecuta UNA herramienta de investigación (buscar_en_corpus/ver_esquema/leer_seccion) sobre el
+    corpus y devuelve su texto. Lo consume el servidor MCP (mcp_corpus.py) del motor por SUSCRIPCIÓN
+    (claude_cli); entrega el MISMO texto que ven DeepSeek/Gemini en su Fase A. Corre en el proceso
+    del backend → usa su cliente Qdrant (sin conflicto de bloqueo)."""
+    check_token(authorization)
+    scope = req.scope or _scope_sources()
+    return {"result": _ejecutar_tool(req.tool, req.args, scope)}
 
 
 def _tools_openai() -> list:
@@ -1127,13 +1263,83 @@ def _investigar_ollama(system: str, pregunta: str, scope: list, model: str,
     return "\n\n---\n\n".join(evidencia), trazas
 
 
+def _mcp_config_corpus(scope: list) -> str:
+    """Escribe un mcp-config temporal para lanzar mcp_corpus.py con el alcance/token/URL de ESTA
+    consulta (por env). Devuelve la ruta del archivo (el llamador la borra al terminar)."""
+    cfg = {"mcpServers": {"corpus": {
+        "command": sys.executable,
+        "args": [MCP_CORPUS_SERVER],
+        "env": {"CORPUS_BACKEND_URL": SELF_URL, "CORPUS_TOKEN": RAG_TOKEN,
+                "CORPUS_SCOPE": json.dumps(scope, ensure_ascii=False)}}}}
+    fd, ruta = tempfile.mkstemp(suffix=".json", prefix="mcp_corpus_")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False)
+    return ruta
+
+
+def _investigar_claude_cli(system: str, pregunta: str, scope: list, model: str,
+                           max_rounds: int = AGENT_MAX_ROUNDS):
+    """FASE A vía Claude Code CLI (motor por SUSCRIPCIÓN): el CLI indaga el corpus con las 3
+    herramientas expuestas por un servidor MCP (mcp_corpus.py → /agent_tool). GENERADOR: hace yield
+    de cada paso legible (progreso en vivo) y RETORNA (evidencia_texto, trazas), MISMO contrato que
+    _investigar_deepseek/_investigar_gemini. Solo herramientas del corpus (las de código, off).
+    `max_rounds` no aplica aquí: el CLI acota sus propias vueltas (SYS_AGENTE le dice cuándo parar)."""
+    cfg = _mcp_config_corpus(scope)
+    extra = ["--mcp-config", cfg,
+             "--allowedTools", "mcp__corpus__buscar_en_corpus",
+             "mcp__corpus__ver_esquema", "mcp__corpus__leer_seccion",
+             "--disallowedTools",
+             "Bash Edit Write Read Glob Grep WebSearch WebFetch NotebookEdit TodoWrite Task"]
+    evidencia, trazas = [], []
+    pendientes = {}                      # tool_use_id → (nombre_corto, args)
+    try:
+        for o in _claude_cli_run(system, pregunta, model, extra_args=extra,
+                                 timeout=CLAUDE_CLI_AGENT_TIMEOUT):
+            t = o.get("type")
+            if t == "assistant":
+                for blk in (o.get("message", {}).get("content") or []):
+                    if not (isinstance(blk, dict) and blk.get("type") == "tool_use"):
+                        continue
+                    nombre = blk.get("name", "")
+                    if not nombre.startswith("mcp__corpus__"):
+                        continue          # ignora ToolSearch y demás built-ins
+                    corto = nombre.split("__")[-1]
+                    args = blk.get("input") or {}
+                    pendientes[blk.get("id")] = (corto, args)
+                    yield _paso_legible(corto, args)
+            elif t == "user":
+                for blk in (o.get("message", {}).get("content") or []):
+                    if not (isinstance(blk, dict) and blk.get("type") == "tool_result"):
+                        continue
+                    tid = blk.get("tool_use_id")
+                    if tid not in pendientes:
+                        continue
+                    corto, args = pendientes.pop(tid)
+                    cont = blk.get("content")
+                    if isinstance(cont, list):
+                        texto = "".join(c.get("text", "") for c in cont if isinstance(c, dict))
+                    else:
+                        texto = str(cont or "")
+                    firma = ", ".join(f"{k}={v}" for k, v in args.items())
+                    trazas.append({"tool": corto, "args": args})
+                    evidencia.append(f"▸ {corto}({firma})\n{texto}")
+    finally:
+        try:
+            os.remove(cfg)
+        except Exception:
+            pass
+    return "\n\n---\n\n".join(evidencia), trazas
+
+
 # Adaptadores de FASE A por proveedor = motores donde el modo agéntico rinde. En la evaluación
 # 2026-07-17 (cuaderno GSI) DeepSeek V4 (22 tool-calls, investigación ejemplar) y Gemini 3.5
 # (5 calls, respuesta completa y correcta) lo hicieron bien; Gemma 4 hizo UNA sola llamada
 # (degeneró a RAG de un tiro), fue el más lento y mezcló métodos → se deja SIN registrar (su
 # adaptador `_investigar_ollama` queda listo por si mejora, pero el botón se le apaga solo vía
 # `agentic_capaz`). Sonnet/Bedrock pendiente (es el confiable; no hizo falta evaluarlo).
-AGENT_ADAPTERS = {"deepseek": _investigar_deepseek, "gemini": _investigar_gemini}
+# claude_cli: Investigación por SUSCRIPCIÓN vía MCP (mcp_corpus.py), fiel a la Fase A semántica.
+AGENT_ADAPTERS = {"deepseek": _investigar_deepseek, "gemini": _investigar_gemini,
+                  "claude_cli": _investigar_claude_cli, "ollama": _investigar_ollama}
 
 
 @app.post("/ask")
@@ -1623,8 +1829,53 @@ def _figuras_tablas_txt(doc: str, texto_scope: str | None = None) -> tuple[str, 
         desc = t.get("descripcion", "") or t.get("texto", "")
         bloque_tabs.append(f"[TABLA] caption: {cap}\n{desc}")
     bloque_tabs_txt = "\n\n".join(bloque_tabs) if bloque_tabs else "ninguna"
-    
+
     return bloque_figs_txt, bloque_tabs_txt
+
+
+def _mapa_figuras(doc: str) -> tuple[set, dict]:
+    """Para resolver el campo 'figura' del quiz: (nombres de archivo servibles por /figura,
+    mapa nº de figura → img). La verdad del archivo es el dir _figs; el nº sale del caption."""
+    figs_dir = MD_DIR / f"{Path(doc).name}_figs"
+    figs_validas = {p.name for p in figs_dir.glob("*")} if figs_dir.exists() else set()
+    num2img: dict = {}
+    desc_path = BASE / "descripciones" / f"{doc}.jsonl"
+    if not desc_path.exists():
+        desc_path = BASE / "descripciones" / f"{Path(doc).stem}.jsonl"
+    if desc_path.exists():
+        with open(desc_path, "r", encoding="utf-8") as f:
+            for ln in f:
+                if not ln.strip():
+                    continue
+                try:
+                    o = json.loads(ln)
+                except Exception:
+                    continue
+                img = o.get("img")
+                num = _num_caption(o.get("caption", "") or o.get("texto", ""))
+                if num is not None and img in figs_validas:
+                    num2img[num] = img
+    return figs_validas, num2img
+
+
+def _resolver_figura(valor, figs_validas: set, num2img: dict):
+    """Normaliza el 'figura' que devuelve el LLM a un archivo real que /figura sí puede servir.
+    El LLM copia mal el img (p.ej. 'Fig. 3', '3', o el nombre sin extensión) → 404 / imagen rota.
+    Recupera el archivo por número de figura si puede; si no, None (mejor sin figura que rota)."""
+    if not valor:
+        return None
+    v = str(valor).strip()
+    nombre = Path(v).name
+    if nombre in figs_validas:                       # match exacto
+        return nombre
+    for f in figs_validas:                           # mismo nombre, distinta/sin extensión
+        if Path(f).stem == Path(nombre).stem:
+            return f
+    m = re.search(r"(\d+)", v)                        # referencia por número ('Fig. 3', '3')
+    if m and int(m.group(1)) in num2img:
+        return num2img[int(m.group(1))]
+    return None
+
 
 def _extraer_json_bloque(txt: str) -> str:
     # Buscar el inicio de un objeto o array
@@ -2046,6 +2297,11 @@ def generar_quiz(req: QuizGenReq, authorization: str | None = Header(default=Non
     # Reasignar IDs secuenciales únicos para evitar duplicados
     for idx, item in enumerate(quiz_items, 1):
         item["id"] = idx
+
+    # Normalizar el 'figura' del LLM a un archivo real (o None): evita el <img> roto en el quiz.
+    figs_validas, num2img = _mapa_figuras(req.doc)
+    for item in quiz_items:
+        item["figura"] = _resolver_figura(item.get("figura"), figs_validas, num2img)
 
     if not quiz_items:
         raise HTTPException(status_code=500, detail="El LLM no generó un JSON de quiz válido o legible en ninguno de los lotes.")
